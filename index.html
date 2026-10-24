@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14151a">
+<title>Foto Opruimen</title>
+<style>
+  :root {
+    --bg: #14151a; --panel: #1c1e25; --panel2: #252831; --border: #333745;
+    --text: #e8e9ee; --muted: #9a9fb0; --accent: #e0a458; --danger: #d4574c;
+    --ok: #5aa879; --radius: 10px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 16px; }
+  body { min-height: 100vh; padding-bottom: env(safe-area-inset-bottom); }
+  button { font: inherit; color: inherit; }
+  .hidden { display: none !important; }
+
+  header.top {
+    position: sticky; top: 0; z-index: 20; background: var(--bg);
+    border-bottom: 1px solid var(--border); padding: 10px 16px 0;
+  }
+  .top-row { display: flex; align-items: center; gap: 10px; min-height: 40px; }
+  .top-row h1 { font-size: 18px; margin: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tabs { display: flex; gap: 4px; margin-top: 6px; }
+  .tab { flex: 1; padding: 12px 8px; background: none; border: 0; border-bottom: 3px solid transparent; color: var(--muted); font-weight: 600; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  main { padding: 16px; max-width: 1100px; margin: 0 auto; }
+  .btn {
+    background: var(--panel2); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 16px; min-height: 46px; cursor: pointer; font-weight: 600;
+  }
+  .btn.primary { background: var(--accent); color: #1a1408; border-color: var(--accent); }
+  .btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .btn.ok { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .btn.small { min-height: 38px; padding: 8px 12px; font-size: 14px; }
+  .btn:disabled { opacity: .4; }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .card h2 { margin: 0 0 8px; font-size: 18px; }
+  .muted { color: var(--muted); font-size: 14px; }
+  input[type=text], select {
+    width: 100%; padding: 12px; font-size: 16px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--radius);
+  }
+  label.lbl { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; }
+  ol.steps { padding-left: 20px; line-height: 1.55; }
+  code { background: var(--bg); padding: 2px 5px; border-radius: 4px; font-size: 13px; word-break: break-all; }
+
+  .summary { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .pill { background: var(--panel2); border: 1px solid var(--border); border-radius: 99px; padding: 6px 12px; font-size: 14px; }
+  .pill b { color: var(--accent); }
+
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .row {
+    display: flex; align-items: center; gap: 10px; text-align: left; width: 100%;
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px; min-height: 54px; cursor: pointer;
+  }
+  .row .name { flex: 1; word-break: break-word; }
+  .row .count { color: var(--muted); font-size: 13px; white-space: nowrap; }
+
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .toolbar select { width: auto; flex: 1; min-width: 120px; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .chip { padding: 8px 12px; border-radius: 99px; background: var(--panel2); border: 1px solid var(--border); font-size: 14px; cursor: pointer; }
+  .chip.active { background: var(--accent); color: #1a1408; border-color: var(--accent); font-weight: 600; }
+
+  .grid { display: flex; flex-wrap: wrap; gap: 4px; }
+  .grid::after { content: ""; flex-grow: 1000; }
+  .tile { position: relative; height: 130px; background: var(--panel); border-radius: 6px; overflow: hidden; cursor: pointer; }
+  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tile.weg img { opacity: .35; }
+  .tile.weg { outline: 3px solid var(--danger); outline-offset: -3px; }
+  .tile.houd { outline: 3px solid var(--ok); outline-offset: -3px; }
+  .tile .badge {
+    position: absolute; left: 6px; top: 6px; font-size: 13px; font-weight: 700; padding: 2px 7px;
+    border-radius: 99px; background: rgba(0,0,0,.65);
+  }
+  .tile.weg .badge { background: var(--danger); }
+  .tile.houd .badge { background: var(--ok); }
+  .tile .check {
+    position: absolute; right: 6px; top: 6px; width: 26px; height: 26px; border-radius: 50%;
+    border: 2px solid #fff; background: rgba(0,0,0,.4); display: none; align-items: center; justify-content: center; font-weight: 700;
+  }
+  .selecting .tile .check { display: flex; }
+  .tile.selected .check { background: var(--accent); border-color: var(--accent); color: #1a1408; }
+  .tile.selected { outline: 3px solid var(--accent); outline-offset: -3px; }
+
+  .bulkbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--panel);
+    border-top: 1px solid var(--border); padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  }
+  .bulkbar .info { flex: 1 1 100%; font-size: 14px; color: var(--muted); }
+  .bulkbar .btn { flex: 1; }
+  .spacer { height: 130px; }
+
+  /* Viewer */
+  #viewer { position: fixed; inset: 0; z-index: 50; background: #000; display: flex; flex-direction: column; touch-action: pan-y; }
+  #viewer .vtop { display: flex; align-items: center; gap: 10px; padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top)); background: rgba(0,0,0,.6); }
+  #viewer .vtitle { flex: 1; min-width: 0; font-size: 14px; }
+  #viewer .vtitle div:last-child { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #viewer .vimg { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; }
+  #viewer .vimg img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  #viewer .vimg.weg img { opacity: .45; }
+  #viewer .vstate { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); padding: 4px 14px; border-radius: 99px; font-weight: 700; }
+  #viewer .vstate.weg { background: var(--danger); } #viewer .vstate.houd { background: var(--ok); }
+  #viewer .vnav { position: absolute; top: 0; bottom: 0; width: 22%; background: none; border: 0; color: #fff; font-size: 34px; opacity: .55; }
+  #viewer .vnav.l { left: 0; text-align: left; padding-left: 10px; } #viewer .vnav.r { right: 0; text-align: right; padding-right: 10px; }
+  #viewer .vbar { display: flex; gap: 8px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: rgba(0,0,0,.75); }
+  #viewer .vbar .btn { flex: 1; min-height: 56px; font-size: 17px; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); z-index: 100;
+    background: #000; color: #fff; padding: 10px 16px; border-radius: 99px; font-size: 14px; max-width: 90vw;
+    border: 1px solid var(--border);
+  }
+  .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 60; display: flex; align-items: flex-end; justify-content: center; }
+  .sheet { background: var(--panel); width: 100%; max-width: 560px; max-height: 80vh; overflow: auto; border-radius: 16px 16px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
+  .sheet h3 { margin: 0 0 10px; }
+  .loading { text-align: center; color: var(--muted); padding: 30px 0; }
+</style>
+</head>
+<body>
+
+<!-- ===== Instellen / inloggen ===== -->
+<main id="view-setup" class="hidden">
+  <div class="card">
+    <h1 style="margin:0 0 8px;font-size:22px">Foto Opruimen</h1>
+    <p class="muted">Eenmalig instellen: plak hieronder het <b>Client-ID</b> van je Google "Webtoepassing"
+      (zie de instructies die erbij zaten). Dit blijft alleen op dit apparaat bewaard.</p>
+    <label class="lbl" for="client-id">Client-ID</label>
+    <input type="text" id="client-id" placeholder="123456-abc.apps.googleusercontent.com" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <div style="margin-top:14px"><button class="btn primary" id="btn-save-client" style="width:100%">Opslaan</button></div>
+  </div>
+</main>
+
+<main id="view-login" class="hidden">
+  <div class="card" style="text-align:center">
+    <h1 style="margin:0 0 8px;font-size:22px">Foto Opruimen</h1>
+    <p class="muted">Log in met het Google-account waar je foto's in Drive staan.</p>
+    <button class="btn primary" id="btn-login" style="width:100%">Inloggen met Google</button>
+    <p class="muted" id="login-msg"></p>
+    <button class="btn small" id="btn-change-client" style="margin-top:8px">Ander Client-ID gebruiken</button>
+  </div>
+</main>
+
+<!-- ===== App ===== -->
+<div id="view-app" class="hidden">
+  <header class="top">
+    <div class="top-row">
+      <button class="btn small hidden" id="btn-back">←</button>
+      <h1 id="title">Foto Opruimen</h1>
+      <button class="btn small" id="btn-select">Selecteren</button>
+      <button class="btn small" id="btn-logout">Uit</button>
+    </div>
+    <div class="tabs">
+      <button class="tab active" id="tab-clean">🧹 Opschonen</button>
+      <button class="tab" id="tab-albums">🖼 Albums</button>
+    </div>
+  </header>
+  <main id="content"></main>
+</div>
+
+<div id="bulk" class="bulkbar hidden"></div>
+<div id="viewer" class="hidden"></div>
+<div id="sheet" class="hidden"></div>
+<div id="toast" class="hidden"></div>
+
+<script>
+"use strict";
+const API = "https://www.googleapis.com/drive/v3";
+const SCOPE = "https://www.googleapis.com/auth/drive";
+const FOLDER = "application/vnd.google-apps.folder";
+const $ = (id) => document.getElementById(id);
+
+// ------------------------------------------------------------------ opslag
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
+
+// ------------------------------------------------------------------ token
+let token = null, tokenExp = 0, tokenClient = null, tokenWaiter = null;
+
+function loadGis() {
+  return new Promise((resolve, reject) => {
+    if (window.google && google.accounts && google.accounts.oauth2) return resolve();
+    const s = document.createElement("script");
+    s.src = "https://accounts.google.com/gsi/client";
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("Kan Google-inlogscript niet laden (geen internet?)"));
+    document.head.appendChild(s);
+  });
+}
+
+async function initTokenClient() {
+  await loadGis();
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: lsGet("fo_client_id"),
+    scope: SCOPE,
+    callback: (resp) => {
+      const w = tokenWaiter; tokenWaiter = null;
+      if (resp.error) { if (w) w.reject(new Error(resp.error_description || resp.error)); return; }
+      token = resp.access_token;
+      tokenExp = Date.now() + (parseInt(resp.expires_in || "3600", 10) - 60) * 1000;
+      lsSet("fo_token", JSON.stringify({ token, tokenExp }));
+      if (w) w.resolve();
+    },
+    error_callback: (err) => {
+      const w = tokenWaiter; tokenWaiter = null;
+      if (w) w.reject(new Error(err && err.type ? err.type : "inloggen mislukt"));
+    },
+  });
+}
+
+function requestToken(interactive) {
+  return new Promise((resolve, reject) => {
+    tokenWaiter = { resolve, reject };
+    try { tokenClient.requestAccessToken({ prompt: interactive ? "" : "none" }); }
+    catch (e) { tokenWaiter = null; reject(e); }
+  });
+}
+
+async function refreshToken() {
+  try { await requestToken(false); }
+  catch (e) { showView("login"); $("login-msg").textContent = "Sessie verlopen: log opnieuw in."; throw e; }
+}
+
+// ------------------------------------------------------------------ Drive API
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function gapi(path, { method = "GET", params, body } = {}) {
+  const url = new URL(API + path);
+  if (params) for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null) url.searchParams.set(k, v);
+  let refreshed = false;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const r = await fetch(url.toString(), {
+      method,
+      headers: Object.assign({ Authorization: "Bearer " + token }, body ? { "Content-Type": "application/json" } : {}),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (r.status === 401 && !refreshed) { refreshed = true; await refreshToken(); continue; }
+    if (r.status === 429 || r.status >= 500) { await sleep(400 * 2 ** attempt); continue; }
+    if (!r.ok) throw new Error("Drive " + r.status + ": " + (await r.text()).slice(0, 200));
+    return r.status === 204 ? null : r.json();
+  }
+  throw new Error("Drive reageert niet, probeer het zo opnieuw.");
+}
+
+async function listAll(q, fields, { orderBy, onPage, maxPages = 1000 } = {}) {
+  let pageToken, out = [];
+  for (let i = 0; i < maxPages; i++) {
+    const res = await gapi("/files", { params: { q, fields: `nextPageToken, files(${fields})`, pageSize: 1000, pageToken, orderBy } });
+    out = out.concat(res.files || []);
+    if (onPage) onPage(out);
+    pageToken = res.nextPageToken;
+    if (!pageToken) break;
+  }
+  return out;
+}
+
+const qEsc = (s) => s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+
+// ------------------------------------------------------------------ hulpjes
+let toastTimer;
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.remove("hidden");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add("hidden"), 3500);
+}
+function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function showView(v) {
+  for (const id of ["setup", "login", "app"]) $("view-" + id).classList.toggle("hidden", id !== v);
+}
+function cleanName(n) { return (n || "").replace(/^\d+_/, "").replace(/\.jpg$/i, ""); }
+function thumbUrl(f, size) {
+  if (!f.thumbnailLink) return "";
+  return f.thumbnailLink.replace(/=s\d+(-c)?$/, "") + "=s" + size;
+}
+const blobCache = new Map();
+async function loadBlobInto(img, fileId) {
+  try {
+    if (!blobCache.has(fileId)) {
+      const r = await fetch(`${API}/files/${fileId}?alt=media`, { headers: { Authorization: "Bearer " + token } });
+      if (!r.ok) return;
+      blobCache.set(fileId, URL.createObjectURL(await r.blob()));
+    }
+    img.src = blobCache.get(fileId);
+  } catch (e) {}
+}
+function setImg(img, f, size) {
+  let triedBlob = false;
+  img.onerror = () => { if (!triedBlob) { triedBlob = true; loadBlobInto(img, f.id); } };
+  const u = thumbUrl(f, size);
+  if (u) img.src = u; else { triedBlob = true; loadBlobInto(img, f.id); }
+}
+
+// ------------------------------------------------------------------ toestand
+const S = {
+  tab: "clean",
+  previewRoot: null, albumsRoot: null,
+  folders: [], folderNames: {},
+  view: "home",            // home | folder | year | albums | album
+  current: null,           // {id,name} of {year}
+  items: [],               // bestanden in huidig overzicht
+  filter: "all",
+  selecting: false, selected: new Set(),
+  albumList: [],
+  weg: null,
+};
+
+function mark(f) { return (f.properties && f.properties.mark) || ""; }
+
+// ------------------------------------------------------------------ opschonen: home
+async function findPreviewRoot() {
+  if (S.previewRoot) return S.previewRoot;
+  const res = await listAll(`mimeType='${FOLDER}' and trashed=false and properties has { key='fa_root' and value='previews' }`, "id,name");
+  if (!res.length) throw new Error('Map "Foto Archief Voorbeelden" niet gevonden in Drive. Draai eerst sync_previews.py op je laptop.');
+  S.previewRoot = res[0].id; return S.previewRoot;
+}
+
+async function renderCleanHome() {
+  S.view = "home"; S.current = null; S.items = [];
+  setHeader("Foto Opruimen", false);
+  const c = $("content");
+  c.innerHTML = '<div class="loading">Mappen laden…</div>';
+  try {
+    const root = await findPreviewRoot();
+    S.folders = await listAll(`'${root}' in parents and trashed=false and mimeType='${FOLDER}'`, "id,name", { orderBy: "name" });
+    S.folderNames = Object.fromEntries(S.folders.map((f) => [f.id, f.name]));
+  } catch (e) { c.innerHTML = `<div class="card"><h2>Niets gevonden</h2><p class="muted">${esc(e.message)}</p></div>`; return; }
+
+  const thisYear = new Date().getFullYear();
+  let years = "";
+  for (let y = thisYear; y >= 1990; y--) years += `<option value="${y}">${y}</option>`;
+  c.innerHTML = `
+    <div class="summary"><span class="pill">Markeringen "weg": <b id="weg-count">…</b></span>
+      <span class="pill">Mappen: <b>${S.folders.length}</b></span></div>
+    <div class="card"><h2>Per jaar</h2>
+      <select id="year-sel"><option value="">Kies een jaar…</option>${years}</select></div>
+    <div class="card" style="padding:12px"><h2 style="margin-left:4px">Per map</h2>
+      <input type="text" id="folder-search" placeholder="Zoek map…" style="margin-bottom:10px">
+      <div class="list" id="folder-list"></div></div>`;
+  $("year-sel").onchange = (e) => { if (e.target.value) openYear(e.target.value); };
+  const draw = () => {
+    const q = $("folder-search").value.toLowerCase();
+    const list = $("folder-list"); list.innerHTML = "";
+    S.folders.filter((f) => f.name.toLowerCase().includes(q)).forEach((f) => {
+      const b = document.createElement("button"); b.className = "row";
+      b.innerHTML = `<span>📁</span><span class="name">${esc(f.name)}</span><span class="count">›</span>`;
+      b.onclick = () => openFolder(f);
+      list.appendChild(b);
+    });
+    if (!list.children.length) list.innerHTML = '<div class="muted">Geen mappen gevonden.</div>';
+  };
+  $("folder-search").oninput = draw; draw();
+  // totaal aantal 'weg' op de achtergrond
+  listAll("properties has { key='mark' and value='weg' } and trashed=false", "id").then((r) => {
+    S.weg = r.length; const el = $("weg-count"); if (el) el.textContent = r.length;
+  }).catch(() => {});
+}
+
+// ------------------------------------------------------------------ opschonen: map / jaar
+const PHOTO_FIELDS = "id,name,thumbnailLink,parents,properties,imageMediaMetadata(width,height)";
+
+async function openFolder(f) {
+  S.view = "folder"; S.current = { id: f.id, name: f.name }; S.filter = "all";
+  await loadItems(`'${f.id}' in parents and trashed=false`, f.name, "name");
+}
+async function openYear(y) {
+  S.view = "year"; S.current = { year: y, name: "Jaar " + y }; S.filter = "all";
+  await loadItems(`properties has { key='fa' and value='1' } and properties has { key='yr' and value='${y}' } and trashed=false`, "Jaar " + y, "name");
+}
+async function loadItems(q, title, orderBy) {
+  setHeader(title, true);
+  exitSelect();
+  const c = $("content");
+  c.innerHTML = '<div class="loading" id="loadmsg">Foto\'s laden…</div>';
+  try {
+    S.items = await listAll(q, PHOTO_FIELDS, { orderBy, onPage: (items) => { const m = $("loadmsg"); if (m) m.textContent = `${items.length} foto's geladen…`; } });
+  } catch (e) { c.innerHTML = `<div class="card"><p class="muted">${esc(e.message)}</p></div>`; return; }
+  renderItems();
+}
+
+function counts() {
+  let weg = 0, houd = 0;
+  S.items.forEach((f) => { const m = mark(f); if (m === "weg") weg++; else if (m === "houd") houd++; });
+  return { weg, houd, open: S.items.length - weg - houd };
+}
+function visibleItems() {
+  return S.items.filter((f) => {
+    const m = mark(f);
+    return S.filter === "all" || (S.filter === "open" && !m) || S.filter === m;
+  });
+}
+
+function renderItems() {
+  const c = $("content"); const n = counts();
+  const isAlbum = S.view === "album";
+  const chips = isAlbum ? "" : `<div class="filters">
+      ${[["all", "Alles " + S.items.length], ["open", "Open " + n.open], ["weg", "Weg " + n.weg], ["houd", "Behouden " + n.houd]]
+        .map(([k, l]) => `<button class="chip ${S.filter === k ? "active" : ""}" data-f="${k}">${l}</button>`).join("")}</div>`;
+  c.innerHTML = chips + '<div class="grid' + (S.selecting ? " selecting" : "") + '" id="grid"></div><div class="spacer"></div>';
+  c.querySelectorAll(".chip").forEach((b) => b.onclick = () => { S.filter = b.dataset.f; renderItems(); });
+  const grid = $("grid"); const vis = visibleItems();
+  if (!vis.length) grid.innerHTML = '<div class="muted" style="padding:20px 0">Niets te tonen.</div>';
+  vis.forEach((f, idx) => grid.appendChild(makeTile(f, idx)));
+  updateBulk();
+}
+
+function makeTile(f, idx) {
+  const w = f.imageMediaMetadata && f.imageMediaMetadata.width, h = f.imageMediaMetadata && f.imageMediaMetadata.height;
+  const ratio = w && h ? w / h : 1.33;
+  const t = document.createElement("div");
+  t.className = "tile"; t.dataset.id = f.id;
+  t.style.flexGrow = String(Math.round(ratio * 100));
+  t.style.flexBasis = Math.round(ratio * 130) + "px";
+  t.style.maxWidth = "100%";
+  const m = mark(f);
+  if (m) t.classList.add(m);
+  if (S.selected.has(f.id)) t.classList.add("selected");
+  const img = document.createElement("img"); img.loading = "lazy"; img.alt = "";
+  setImg(img, f, 400); t.appendChild(img);
+  t.insertAdjacentHTML("beforeend", (m ? `<span class="badge">${m === "weg" ? "🗑 weg" : "✓"}</span>` : "") + '<span class="check">✓</span>');
+  t.onclick = () => {
+    if (S.selecting) toggleSelect(f.id, t);
+    else openViewer(idx);
+  };
+  return t;
+}
+
+function setHeader(title, back) {
+  $("title").textContent = title;
+  $("btn-back").classList.toggle("hidden", !back);
+  $("btn-select").classList.toggle("hidden", !(S.view === "folder" || S.view === "year" || S.view === "album"));
+}
+
+// ------------------------------------------------------------------ markeren
+async function setMarks(files, value) {
+  // value: "weg" | "houd" | "" (wissen). Optimistisch bijwerken, daarna naar Drive.
+  const prev = files.map((f) => [f, mark(f)]);
+  files.forEach((f) => {
+    f.properties = Object.assign({}, f.properties);
+    if (value) f.properties.mark = value; else delete f.properties.mark;
+  });
+  let failed = 0, idx = 0;
+  const worker = async () => {
+    while (idx < files.length) {
+      const f = files[idx++];
+      try {
+        await gapi("/files/" + f.id, { method: "PATCH", params: { fields: "id" }, body: { properties: { mark: value || null } } });
+      } catch (e) {
+        failed++;
+        f.properties = Object.assign({}, f.properties);
+        const old = prev.find((p) => p[0] === f)[1];
+        if (old) f.properties.mark = old; else delete f.properties.mark;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(5, files.length) }, worker));
+  if (failed) toast(`${failed} markering(en) mislukt`);
+  return failed;
+}
+
+// ------------------------------------------------------------------ selecteren
+function exitSelect() { S.selecting = false; S.selected = new Set(); $("btn-select").textContent = "Selecteren"; updateBulk(); }
+function toggleSelect(id, tile) {
+  if (S.selected.has(id)) S.selected.delete(id); else S.selected.add(id);
+  tile.classList.toggle("selected", S.selected.has(id));
+  updateBulk();
+}
+function selectedFiles() { return S.items.filter((f) => S.selected.has(f.id)); }
+
+function updateBulk() {
+  const b = $("bulk");
+  if (!S.selecting) { b.classList.add("hidden"); const g = $("grid"); if (g) g.classList.remove("selecting"); return; }
+  const g = $("grid"); if (g) g.classList.add("selecting");
+  b.classList.remove("hidden");
+  const n = S.selected.size;
+  if (S.view === "album") {
+    b.innerHTML = `<div class="info">${n} geselecteerd</div>
+      <button class="btn" id="bk-all">Alles</button>
+      <button class="btn primary" id="bk-move" ${n ? "" : "disabled"}>Verplaats naar…</button>
+      <button class="btn" id="bk-add" ${n ? "" : "disabled"}>Ook in…</button>
+      <button class="btn" id="bk-rm" ${n ? "" : "disabled"}>Uit album</button>`;
+    $("bk-all").onclick = selectAllVisible;
+    $("bk-move").onclick = () => pickAlbum("move");
+    $("bk-add").onclick = () => pickAlbum("add");
+    $("bk-rm").onclick = removeFromAlbum;
+  } else {
+    b.innerHTML = `<div class="info">${n} geselecteerd</div>
+      <button class="btn" id="bk-all">Alles</button>
+      <button class="btn danger" id="bk-weg" ${n ? "" : "disabled"}>🗑 Weg</button>
+      <button class="btn ok" id="bk-houd" ${n ? "" : "disabled"}>✓ Houden</button>
+      <button class="btn" id="bk-clear" ${n ? "" : "disabled"}>Wis</button>`;
+    $("bk-all").onclick = selectAllVisible;
+    const act = (v) => async () => {
+      const files = selectedFiles(); if (!files.length) return;
+      await setMarks(files, v); S.selected = new Set(); renderItems();
+      toast(v === "weg" ? `${files.length} gemarkeerd als weg` : v === "houd" ? `${files.length} behouden` : "Markering gewist");
+    };
+    $("bk-weg").onclick = act("weg"); $("bk-houd").onclick = act("houd"); $("bk-clear").onclick = act("");
+  }
+}
+function selectAllVisible() {
+  const vis = visibleItems();
+  const all = vis.every((f) => S.selected.has(f.id));
+  vis.forEach((f) => all ? S.selected.delete(f.id) : S.selected.add(f.id));
+  renderItems();
+}
+
+// ------------------------------------------------------------------ viewer
+let vIndex = 0, vList = [];
+function openViewer(idx) {
+  vList = visibleItems(); vIndex = idx;
+  $("viewer").classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+  renderViewer();
+}
+function closeViewer() {
+  $("viewer").classList.add("hidden"); document.body.style.overflow = "";
+  if (S.view !== "home") renderItems();
+}
+function renderViewer() {
+  const f = vList[vIndex]; if (!f) return closeViewer();
+  const m = mark(f);
+  const folder = (f.parents || []).map((p) => S.folderNames[p]).filter(Boolean)[0] || "";
+  const album = S.view === "album";
+  const v = $("viewer");
+  v.innerHTML = `
+    <div class="vtop"><button class="btn small" id="v-close">✕</button>
+      <div class="vtitle"><div>${esc(cleanName(f.name))}</div><div>${esc(folder)} · ${vIndex + 1}/${vList.length}</div></div></div>
+    <div class="vimg ${m}" id="v-img">
+      ${m ? `<span class="vstate ${m}">${m === "weg" ? "🗑 weg" : "✓ behouden"}</span>` : ""}
+      <img alt="" id="v-photo">
+      <button class="vnav l" id="v-prev">‹</button><button class="vnav r" id="v-next">›</button>
+    </div>
+    ${album ? "" : `<div class="vbar">
+      <button class="btn danger" id="v-weg">🗑 Weg</button>
+      <button class="btn ok" id="v-houd">✓ Houden</button>
+      <button class="btn" id="v-clear">Wis</button></div>`}`;
+  setImg($("v-photo"), f, 1200);
+  $("v-close").onclick = closeViewer;
+  $("v-prev").onclick = () => nav(-1); $("v-next").onclick = () => nav(1);
+  if (!album) {
+    const act = (val) => async () => { await setMarks([f], val); if (val) nav(1, true); else renderViewer(); };
+    $("v-weg").onclick = act("weg"); $("v-houd").onclick = act("houd"); $("v-clear").onclick = act("");
+  }
+  // voorladen
+  [vList[vIndex + 1], vList[vIndex - 1]].forEach((n) => { if (n && n.thumbnailLink) new Image().src = thumbUrl(n, 1200); });
+}
+function nav(d, fromMark) {
+  const n = vIndex + d;
+  if (n < 0 || n >= vList.length) { if (fromMark) { toast("Einde van de lijst"); closeViewer(); } return; }
+  vIndex = n; renderViewer();
+}
+(function swipe() {
+  let x0 = null, y0 = null;
+  const v = $("viewer");
+  v.addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  v.addEventListener("touchend", (e) => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) nav(dx < 0 ? 1 : -1);
+  }, { passive: true });
+})();
+document.addEventListener("keydown", (e) => {
+  if ($("viewer").classList.contains("hidden")) return;
+  if (e.key === "ArrowRight") nav(1); else if (e.key === "ArrowLeft") nav(-1); else if (e.key === "Escape") closeViewer();
+});
+
+// ------------------------------------------------------------------ albums
+async function findAlbumsRoot() {
+  if (S.albumsRoot) return S.albumsRoot;
+  const res = await listAll(`mimeType='${FOLDER}' and trashed=false and name='Foto Archief Albums'`, "id,name");
+  if (!res.length) throw new Error('Map "Foto Archief Albums" niet gevonden. Draai eerst sync_to_drive.py op je laptop.');
+  S.albumsRoot = res[0].id; return S.albumsRoot;
+}
+async function renderAlbumsHome() {
+  S.view = "albums"; S.current = null; S.items = [];
+  setHeader("Albums", false); exitSelect();
+  const c = $("content"); c.innerHTML = '<div class="loading">Albums laden…</div>';
+  try {
+    const root = await findAlbumsRoot();
+    S.albumList = await listAll(`'${root}' in parents and trashed=false and mimeType='${FOLDER}'`, "id,name", { orderBy: "name" });
+  } catch (e) { c.innerHTML = `<div class="card"><h2>Niets gevonden</h2><p class="muted">${esc(e.message)}</p></div>`; return; }
+  c.innerHTML = `<p class="muted">Verplaats foto's tussen bestaande albums. Nieuwe albums maak je in de foto-app op je laptop.</p><div class="list" id="album-list"></div>`;
+  const list = $("album-list");
+  if (!S.albumList.length) list.innerHTML = '<div class="muted">Nog geen albums gesynct.</div>';
+  S.albumList.forEach((a) => {
+    const b = document.createElement("button"); b.className = "row";
+    b.innerHTML = `<span>🖼</span><span class="name">${esc(a.name)}</span><span class="count">›</span>`;
+    b.onclick = () => openAlbum(a); list.appendChild(b);
+  });
+}
+async function openAlbum(a) {
+  S.view = "album"; S.current = { id: a.id, name: a.name }; S.filter = "all";
+  await loadItems(`'${a.id}' in parents and trashed=false and mimeType contains 'image/'`, a.name, "name");
+  setHeader(a.name, true);
+}
+function pickAlbum(mode) {
+  const files = selectedFiles(); if (!files.length) return;
+  const targets = S.albumList.filter((a) => a.id !== S.current.id);
+  const sh = $("sheet");
+  sh.className = "sheet-bg";
+  sh.innerHTML = `<div class="sheet"><h3>${mode === "move" ? "Verplaats" : "Voeg toe"} ${files.length} foto('s) ${mode === "move" ? "naar" : "óók aan"}…</h3>
+    <div class="list">${targets.map((a) => `<button class="row" data-id="${a.id}"><span>🖼</span><span class="name">${esc(a.name)}</span></button>`).join("") || '<div class="muted">Geen andere albums.</div>'}</div>
+    <button class="btn" id="sheet-cancel" style="width:100%;margin-top:12px">Annuleren</button></div>`;
+  $("sheet-cancel").onclick = closeSheet;
+  sh.onclick = (e) => { if (e.target === sh) closeSheet(); };
+  sh.querySelectorAll("[data-id]").forEach((b) => b.onclick = async () => {
+    closeSheet();
+    let ok = 0;
+    for (const f of files) {
+      try {
+        const params = { addParents: b.dataset.id, fields: "id,parents" };
+        if (mode === "move") params.removeParents = S.current.id;
+        const res = await gapi("/files/" + f.id, { method: "PATCH", params, body: {} });
+        f.parents = res.parents; ok++;
+        if (mode === "move") S.items = S.items.filter((x) => x.id !== f.id);
+      } catch (e) { toast("Mislukt: " + e.message.slice(0, 80)); }
+    }
+    S.selected = new Set(); renderItems();
+    toast(`${ok} foto('s) ${mode === "move" ? "verplaatst" : "toegevoegd"}`);
+  });
+}
+function closeSheet() { $("sheet").className = "hidden"; $("sheet").innerHTML = ""; }
+async function removeFromAlbum() {
+  const files = selectedFiles(); if (!files.length) return;
+  const multi = files.filter((f) => (f.parents || []).length > 1);
+  if (multi.length < files.length) {
+    toast(`${files.length - multi.length} foto('s) staan alleen in dit album: gebruik "Verplaats naar…", of markeer ze als weg bij Opschonen.`);
+  }
+  if (!multi.length) return;
+  for (const f of multi) {
+    try {
+      const res = await gapi("/files/" + f.id, { method: "PATCH", params: { removeParents: S.current.id, fields: "id,parents" }, body: {} });
+      f.parents = res.parents; S.items = S.items.filter((x) => x.id !== f.id);
+    } catch (e) { toast("Mislukt: " + e.message.slice(0, 80)); }
+  }
+  S.selected = new Set(); renderItems();
+}
+
+// ------------------------------------------------------------------ navigatie
+function setTab(t) {
+  S.tab = t;
+  $("tab-clean").classList.toggle("active", t === "clean");
+  $("tab-albums").classList.toggle("active", t === "albums");
+  exitSelect();
+  if (t === "clean") renderCleanHome(); else renderAlbumsHome();
+}
+$("tab-clean").onclick = () => setTab("clean");
+$("tab-albums").onclick = () => setTab("albums");
+$("btn-back").onclick = () => setTab(S.tab);
+$("btn-select").onclick = () => {
+  S.selecting = !S.selecting; S.selected = new Set();
+  $("btn-select").textContent = S.selecting ? "Klaar" : "Selecteren";
+  renderItems();
+};
+$("btn-logout").onclick = () => {
+  try { if (token && window.google) google.accounts.oauth2.revoke(token, () => {}); } catch (e) {}
+  token = null; lsSet("fo_token", null); showView("login");
+};
+
+// ------------------------------------------------------------------ start
+$("btn-save-client").onclick = () => {
+  const v = $("client-id").value.trim();
+  if (!/\.apps\.googleusercontent\.com$/.test(v)) { toast("Dat lijkt geen geldig Client-ID (eindigt op .apps.googleusercontent.com)"); return; }
+  lsSet("fo_client_id", v); start();
+};
+$("btn-change-client").onclick = () => { $("client-id").value = lsGet("fo_client_id") || ""; showView("setup"); };
+$("btn-login").onclick = async () => {
+  $("login-msg").textContent = "";
+  try { await initTokenClient(); await requestToken(true); enterApp(); }
+  catch (e) { $("login-msg").textContent = "Inloggen mislukt: " + e.message; }
+};
+
+function enterApp() { showView("app"); setTab("clean"); }
+
+async function start() {
+  // client-id via link: foto_opruimen.html#client=....apps.googleusercontent.com
+  const m = location.hash.match(/client=([^&]+)/);
+  if (m) { lsSet("fo_client_id", decodeURIComponent(m[1])); history.replaceState(null, "", location.pathname); }
+  if (!lsGet("fo_client_id")) return showView("setup");
+  try {
+    const saved = JSON.parse(lsGet("fo_token") || "null");
+    if (saved && saved.tokenExp > Date.now() + 60000) {
+      token = saved.token; tokenExp = saved.tokenExp;
+      await initTokenClient();
+      return enterApp();
+    }
+  } catch (e) {}
+  showView("login");
+}
+start();
+</script>
+</body>
+</html>
