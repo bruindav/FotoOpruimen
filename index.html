@@ -576,7 +576,8 @@ document.addEventListener("keydown", (e) => {
 // ------------------------------------------------------------------ albums
 async function findAlbumsRoot() {
   if (S.albumsRoot) return S.albumsRoot;
-  const res = await listAll(`mimeType='${FOLDER}' and trashed=false and name='Foto Archief Albums'`, "id,name");
+  let res = await listAll(`mimeType='${FOLDER}' and trashed=false and properties has { key='fa_root' and value='albums' }`, "id,name");
+  if (!res.length) res = await listAll(`mimeType='${FOLDER}' and trashed=false and name='Foto Archief Albums'`, "id,name");
   if (!res.length) throw new Error('Map "Foto Archief Albums" niet gevonden. Draai eerst sync_to_drive.py op je laptop.');
   S.albumsRoot = res[0].id; return S.albumsRoot;
 }
