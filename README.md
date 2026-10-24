@@ -15,11 +15,11 @@ Hoe het werkt:
 4. Tab **Albums**: selecteer foto's, dan "Verplaats naar…", "Ook in…" of "Uit album". Nieuwe albums maak je in de foto-app op de laptop. Een foto die maar in één album staat kan niet "uit album"; verplaats of markeer hem.
 
 ## Laptop: eenmalig
-Zet in dezelfde map als `beheer_web.py`: `sync_to_drive.py`, `sync_previews.py`, `pull_from_drive.py`, `client_secret.json` (Desktop-client uit het Google Cloud-project; bij eerste inlog ontstaat `token.json`).
+Zet in dezelfde map als `beheer.py`: `beheer.py` (of `beheer_web.py`), `help_teksten.py`, `sync_to_drive.py`, `sync_previews.py`, `pull_from_drive.py`, `client_secret.json` (Desktop-client uit het Google Cloud-project; bij eerste inlog ontstaat `token.json`).
 
 Installeren (eenmalig): `python -m pip install google-auth-oauthlib google-api-python-client google-auth-httplib2 Pillow`
 
-Start `beheer_web.py` en ga naar de tab **Cloud sync**.
+Start `beheer.py` en ga naar de tab **Cloud sync**. Onduidelijk wat een knop doet? Klik **❓ Uitleg bij dit tabblad** of open het tabblad **❓ Help**.
 
 ### Stap 1: voorbeelden naar Drive
 1. Vul eerst `100` in bij "Alleen de eerste … foto's" en klik **Voorbeelden naar Drive zetten**.
