@@ -177,6 +177,8 @@ const API = "https://www.googleapis.com/drive/v3";
 const SCOPE = "https://www.googleapis.com/auth/drive";
 const FOLDER = "application/vnd.google-apps.folder";
 const $ = (id) => document.getElementById(id);
+// Client-ID is niet geheim; ingebouwd zodat je niets hoeft in te typen of in de link te zetten.
+const DEFAULT_CLIENT_ID = "10444505530-oaftfitgok7urjcn5m18e7oe7md3q591.apps.googleusercontent.com";
 
 // ------------------------------------------------------------------ opslag
 function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
@@ -683,6 +685,7 @@ async function start() {
   // client-id via link: foto_opruimen.html#client=....apps.googleusercontent.com
   const m = location.hash.match(/client=([^&]+)/);
   if (m) { lsSet("fo_client_id", decodeURIComponent(m[1])); history.replaceState(null, "", location.pathname); }
+  if (!lsGet("fo_client_id") && DEFAULT_CLIENT_ID) lsSet("fo_client_id", DEFAULT_CLIENT_ID);
   if (!lsGet("fo_client_id")) return showView("setup");
   try {
     const saved = JSON.parse(lsGet("fo_token") || "null");
