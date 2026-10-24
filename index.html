@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#14151a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Foto Opruimen">
 <title>Foto Opruimen</title>
 <style>
   :root {
@@ -315,6 +321,38 @@ const S = {
 
 function mark(f) { return (f.properties && f.properties.mark) || ""; }
 
+// ------------------------------------------------------------------ terug-knop (geschiedenis)
+// Elk "scherm erbovenop" (lijst, grote foto, keuzemenu, selecteermodus) krijgt een
+// geschiedenisregel; de terug-knop van de telefoon sluit dan dat scherm i.p.v. de app.
+let navStack = [], pendingFn = null, lastExit = 0, histReady = false;
+const navTop = () => navStack[navStack.length - 1];
+function pushNav(kind) { navStack.push(kind); try { history.pushState({ k: kind }, ""); } catch (e) {} }
+function goBack() { try { history.back(); } catch (e) {} }
+function unwindThen(fn) {            // alle schermen erbovenop weg, dan fn()
+  if (!navStack.length) return fn();
+  const n = navStack.length; navStack = []; pendingFn = fn;
+  hideViewer(true); hideSheet(); history.go(-n);
+}
+function initHistory() {
+  if (histReady) return; histReady = true;
+  try { history.replaceState({ k: "base" }, ""); history.pushState({ k: "home" }, ""); } catch (e) {}
+}
+window.addEventListener("popstate", () => {
+  if (pendingFn) { const f = pendingFn; pendingFn = null; f(); return; }
+  if (!navStack.length) {            // terug op het beginscherm: eerst waarschuwen, 2e keer sluit de app
+    if ($("view-app").classList.contains("hidden")) return;
+    if (Date.now() - lastExit < 2500) { goBack(); return; }
+    lastExit = Date.now(); toast("Druk nogmaals op terug om te sluiten");
+    try { history.pushState({ k: "home" }, ""); } catch (e) {}
+    return;
+  }
+  const kind = navStack.pop();
+  if (kind === "viewer") hideViewer();
+  else if (kind === "sheet") hideSheet();
+  else if (kind === "select") { exitSelect(); if (S.items.length) renderItems(); }
+  else if (kind === "list") { exitSelect(); S.tab === "clean" ? renderCleanHome() : renderAlbumsHome(); }
+});
+
 // ------------------------------------------------------------------ opschonen: home
 async function findPreviewRoot() {
   if (S.previewRoot) return S.previewRoot;
@@ -376,6 +414,7 @@ async function openYear(y) {
   await loadItems(`properties has { key='fa' and value='1' } and properties has { key='yr' and value='${y}' } and trashed=false`, "Jaar " + y, "name");
 }
 async function loadItems(q, title, orderBy) {
+  if (navTop() !== "list") pushNav("list");
   setHeader(title, true);
   exitSelect();
   const c = $("content");
@@ -517,13 +556,15 @@ function selectAllVisible() {
 let vIndex = 0, vList = [];
 function openViewer(idx) {
   vList = visibleItems(); vIndex = idx;
+  pushNav("viewer");
   $("viewer").classList.remove("hidden");
   document.body.style.overflow = "hidden";
   renderViewer();
 }
-function closeViewer() {
+function closeViewer() { if (navTop() === "viewer") goBack(); else hideViewer(); }
+function hideViewer(quiet) {
   $("viewer").classList.add("hidden"); document.body.style.overflow = "";
-  if (S.view !== "home") renderItems();
+  if (!quiet && S.view !== "home") renderItems();
 }
 function renderViewer() {
   const f = vList[vIndex]; if (!f) return closeViewer();
@@ -607,6 +648,7 @@ function pickAlbum(mode) {
   const files = selectedFiles(); if (!files.length) return;
   const targets = S.albumList.filter((a) => a.id !== S.current.id);
   const sh = $("sheet");
+  pushNav("sheet");
   sh.className = "sheet-bg";
   sh.innerHTML = `<div class="sheet"><h3>${mode === "move" ? "Verplaats" : "Voeg toe"} ${files.length} foto('s) ${mode === "move" ? "naar" : "óók aan"}…</h3>
     <div class="list">${targets.map((a) => `<button class="row" data-id="${a.id}"><span>🖼</span><span class="name">${esc(a.name)}</span></button>`).join("") || '<div class="muted">Geen andere albums.</div>'}</div>
@@ -629,7 +671,8 @@ function pickAlbum(mode) {
     toast(`${ok} foto('s) ${mode === "move" ? "verplaatst" : "toegevoegd"}`);
   });
 }
-function closeSheet() { $("sheet").className = "hidden"; $("sheet").innerHTML = ""; }
+function closeSheet() { if (navTop() === "sheet") goBack(); else hideSheet(); }
+function hideSheet() { $("sheet").className = "hidden"; $("sheet").innerHTML = ""; }
 async function removeFromAlbum() {
   const files = selectedFiles(); if (!files.length) return;
   const multi = files.filter((f) => (f.parents || []).length > 1);
@@ -647,7 +690,8 @@ async function removeFromAlbum() {
 }
 
 // ------------------------------------------------------------------ navigatie
-function setTab(t) {
+function setTab(t) { unwindThen(() => setTabNow(t)); }
+function setTabNow(t) {
   S.tab = t;
   $("tab-clean").classList.toggle("active", t === "clean");
   $("tab-albums").classList.toggle("active", t === "albums");
@@ -656,10 +700,11 @@ function setTab(t) {
 }
 $("tab-clean").onclick = () => setTab("clean");
 $("tab-albums").onclick = () => setTab("albums");
-$("btn-back").onclick = () => setTab(S.tab);
+$("btn-back").onclick = () => { if (navTop() === "list") goBack(); else setTab(S.tab); };
 $("btn-select").onclick = () => {
-  S.selecting = !S.selecting; S.selected = new Set();
-  $("btn-select").textContent = S.selecting ? "Klaar" : "Selecteren";
+  if (S.selecting) { if (navTop() === "select") goBack(); else { exitSelect(); renderItems(); } return; }
+  S.selecting = true; S.selected = new Set(); pushNav("select");
+  $("btn-select").textContent = "Klaar";
   renderItems();
 };
 $("btn-logout").onclick = () => {
@@ -680,7 +725,7 @@ $("btn-login").onclick = async () => {
   catch (e) { $("login-msg").textContent = "Inloggen mislukt: " + e.message; }
 };
 
-function enterApp() { showView("app"); setTab("clean"); }
+function enterApp() { showView("app"); initHistory(); setTabNow("clean"); }
 
 async function start() {
   // client-id via link: foto_opruimen.html#client=....apps.googleusercontent.com
@@ -699,6 +744,7 @@ async function start() {
   showView("login");
 }
 start();
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>
 </body>
 </html>
