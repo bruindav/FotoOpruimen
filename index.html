@@ -88,6 +88,12 @@
   .tile.weg img { opacity: .35; }
   .tile.weg { outline: 3px solid var(--danger); outline-offset: -3px; }
   .tile.houd { outline: 3px solid var(--ok); outline-offset: -3px; }
+  .tile.mv { outline: 3px solid #5b8def; outline-offset: -3px; }
+  .tile.mv .badge { background: #5b8def; max-width: 85%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mergebar { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-bottom: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .mergebar .txt { flex: 1 1 200px; font-size: 14px; color: var(--muted); }
+  .mergebar .txt b { color: #8fb0ff; }
+  .pick-row { cursor: pointer; }
   .tile .badge {
     position: absolute; left: 6px; top: 6px; font-size: 13px; font-weight: 700; padding: 2px 7px;
     border-radius: 99px; background: rgba(0,0,0,.65);
@@ -374,7 +380,7 @@ async function renderCleanHome() {
   c.innerHTML = '<div class="loading">Mappen laden…</div>';
   try {
     const root = await findPreviewRoot();
-    S.folders = await listAll(`'${root}' in parents and trashed=false and mimeType='${FOLDER}'`, "id,name", { orderBy: "name" });
+    S.folders = await listAll(`'${root}' in parents and trashed=false and mimeType='${FOLDER}'`, "id,name,properties", { orderBy: "name" });
     S.folderNames = Object.fromEntries(S.folders.map((f) => [f.id, f.name]));
   } catch (e) { c.innerHTML = `<div class="card"><h2>Niets gevonden</h2><p class="muted">${esc(e.message)}</p></div>`; return; }
 
@@ -451,14 +457,17 @@ async function loadItems(q, title, orderBy) {
 }
 
 function counts() {
-  let weg = 0, houd = 0;
-  S.items.forEach((f) => { const m = mark(f); if (m === "weg") weg++; else if (m === "houd") houd++; });
-  return { weg, houd, open: S.items.length - weg - houd };
+  let weg = 0, houd = 0, move = 0;
+  S.items.forEach((f) => {
+    const m = mark(f); if (m === "weg") weg++; else if (m === "houd") houd++;
+    if (f.properties && f.properties.mv) move++;
+  });
+  return { weg, houd, move, open: S.items.filter((f) => !mark(f) && !(f.properties && f.properties.mv)).length };
 }
 function visibleItems() {
   return S.items.filter((f) => {
-    const m = mark(f);
-    return S.filter === "all" || (S.filter === "open" && !m) || S.filter === m;
+    const m = mark(f), mv = f.properties && f.properties.mv;
+    return S.filter === "all" || (S.filter === "open" && !m && !mv) || S.filter === m || (S.filter === "move" && mv);
   });
 }
 
@@ -466,10 +475,11 @@ function renderItems() {
   const c = $("content"); const n = counts();
   const isAlbum = S.view === "album";
   const chips = isAlbum ? "" : `<div class="filters">
-      ${[["all", "Alles " + S.items.length], ["open", "Open " + n.open], ["weg", "Weg " + n.weg], ["houd", "Behouden " + n.houd]]
+      ${[["all", "Alles " + S.items.length], ["open", "Open " + n.open], ["weg", "Weg " + n.weg], ["houd", "Behouden " + n.houd], ["move", "Verplaatsen " + n.move]]
         .map(([k, l]) => `<button class="chip ${S.filter === k ? "active" : ""}" data-f="${k}">${l}</button>`).join("")}</div>`;
-  c.innerHTML = chips + '<div class="grid' + (S.selecting ? " selecting" : "") + '" id="grid"></div><div class="spacer"></div>';
+  c.innerHTML = mergeBarHtml() + chips + '<div class="grid' + (S.selecting ? " selecting" : "") + '" id="grid"></div><div class="spacer"></div>';
   c.querySelectorAll(".chip").forEach((b) => b.onclick = () => { S.filter = b.dataset.f; renderItems(); });
+  wireMergeBar();
   const grid = $("grid"); const vis = visibleItems();
   if (!vis.length) grid.innerHTML = '<div class="muted" style="padding:20px 0">Niets te tonen.</div>';
   vis.forEach((f, idx) => grid.appendChild(makeTile(f, idx)));
@@ -485,11 +495,13 @@ function makeTile(f, idx) {
   t.style.flexBasis = Math.round(ratio * 130) + "px";
   t.style.maxWidth = "100%";
   const m = mark(f);
+  const mv = f.properties && f.properties.mv;
   if (m) t.classList.add(m);
+  if (mv) t.classList.add("mv");
   if (S.selected.has(f.id)) t.classList.add("selected");
   const img = document.createElement("img"); img.loading = "lazy"; img.alt = "";
   setImg(img, f, 400); t.appendChild(img);
-  t.insertAdjacentHTML("beforeend", (m ? `<span class="badge">${m === "weg" ? "🗑 weg" : "✓"}</span>` : "") + '<span class="check">✓</span>');
+  t.insertAdjacentHTML("beforeend", (m ? `<span class="badge">${m === "weg" ? "🗑 weg" : "✓"}</span>` : mv ? `<span class="badge">→ ${esc(S.folderNames[mv] || "map")}</span>` : "") + '<span class="check">✓</span>');
   t.onclick = () => {
     if (S.selecting) toggleSelect(f.id, t);
     else openViewer(idx);
@@ -504,30 +516,109 @@ function setHeader(title, back) {
 }
 
 // ------------------------------------------------------------------ markeren
-async function setMarks(files, value) {
-  // value: "weg" | "houd" | "" (wissen). Optimistisch bijwerken, daarna naar Drive.
-  const prev = files.map((f) => [f, mark(f)]);
+async function setProps(files, patch) {
+  // patch: {sleutel: waarde | null}. Optimistisch bijwerken, daarna naar Drive; bij fout terugdraaien.
+  const prev = files.map((f) => [f, Object.assign({}, f.properties)]);
   files.forEach((f) => {
     f.properties = Object.assign({}, f.properties);
-    if (value) f.properties.mark = value; else delete f.properties.mark;
+    for (const [k, v] of Object.entries(patch)) { if (v === null) delete f.properties[k]; else f.properties[k] = v; }
   });
   let failed = 0, idx = 0;
   const worker = async () => {
     while (idx < files.length) {
       const f = files[idx++];
       try {
-        await gapi("/files/" + f.id, { method: "PATCH", params: { fields: "id" }, body: { properties: { mark: value || null } } });
+        await gapi("/files/" + f.id, { method: "PATCH", params: { fields: "id" }, body: { properties: patch } });
       } catch (e) {
         failed++;
-        f.properties = Object.assign({}, f.properties);
-        const old = prev.find((p) => p[0] === f)[1];
-        if (old) f.properties.mark = old; else delete f.properties.mark;
+        f.properties = prev.find((p) => p[0] === f)[1];
       }
     }
   };
   await Promise.all(Array.from({ length: Math.min(5, files.length) }, worker));
-  if (failed) toast(`${failed} markering(en) mislukt`);
+  if (failed) toast(`${failed} wijziging(en) mislukt`);
   return failed;
+}
+
+async function setMarks(files, value) {
+  // value: "weg" | "houd" | "" (alles wissen). Weg of wissen haalt ook een verplaats-verzoek weg.
+  const patch = { mark: value || null };
+  if (value !== "houd") { patch.mv = null; patch.mvf = null; }
+  return setProps(files, patch);
+}
+
+function setMove(files, folder) {
+  return setProps(files, { mv: folder.id, mvf: "1", mark: null });
+}
+
+// Keuzemenu met zoekvak om een map te kiezen (voor verplaatsen / samenvoegen)
+function pickFolder(title, excludeId, onPick) {
+  const sh = $("sheet");
+  pushNav("sheet");
+  sh.className = "sheet-bg";
+  sh.innerHTML = `<div class="sheet"><h3>${esc(title)}</h3>
+    <input type="text" id="pick-search" placeholder="Zoek map…" style="margin-bottom:10px">
+    <div class="list" id="pick-list"></div>
+    <button class="btn" id="sheet-cancel" style="width:100%;margin-top:12px">Annuleren</button></div>`;
+  $("sheet-cancel").onclick = closeSheet;
+  sh.onclick = (e) => { if (e.target === sh) closeSheet(); };
+  const draw = () => {
+    const q = $("pick-search").value.toLowerCase();
+    const list = $("pick-list"); list.innerHTML = "";
+    S.folders.filter((f) => f.id !== excludeId && f.name.toLowerCase().includes(q)).slice(0, 200).forEach((f) => {
+      const b = document.createElement("button"); b.className = "row pick-row";
+      b.innerHTML = `<span>📁</span><span class="name">${esc(f.name)}</span>`;
+      b.onclick = () => { closeSheet(); onPick(f); };
+      list.appendChild(b);
+    });
+    if (!list.children.length) list.innerHTML = '<div class="muted">Geen mappen gevonden.</div>';
+  };
+  $("pick-search").oninput = draw; draw();
+}
+
+async function moveFilesDialog(files, afterDone) {
+  if (!files.length) return;
+  const cur = S.view === "folder" ? S.current.id : null;
+  pickFolder(`Verplaats ${files.length} foto('s) naar…`, cur, async (folder) => {
+    const failed = await setMove(files, folder);
+    toast(failed ? "Niet alles gelukt" : `${files.length} foto('s) staan klaar om naar "${folder.name}" te verhuizen (controle op laptop)`);
+    afterDone();
+  });
+}
+
+// ------------------------------------------------------------------ map samenvoegen
+function currentFolderObj() { return S.folders.find((f) => f.id === (S.current && S.current.id)); }
+
+function mergeBarHtml() {
+  if (S.view !== "folder") return "";
+  const f = currentFolderObj(); if (!f) return "";
+  const tgt = f.properties && f.properties.merge_into;
+  if (tgt) {
+    return `<div class="mergebar"><div class="txt">🔀 Gevraagd: samenvoegen met <b>${esc(S.folderNames[tgt] || "?")}</b>. Dit wordt pas uitgevoerd na jouw controle op de laptop.</div>
+      <button class="btn small" id="merge-cancel">Annuleren</button></div>`;
+  }
+  return `<div class="mergebar"><div class="txt">Deze map samenvoegen met een andere map?</div>
+    <button class="btn small" id="merge-start">🔀 Samenvoegen…</button></div>`;
+}
+
+function wireMergeBar() {
+  const f = currentFolderObj(); if (!f) return;
+  const start = $("merge-start"), cancel = $("merge-cancel");
+  if (start) start.onclick = () => pickFolder(`Voeg "${f.name}" samen met…`, f.id, async (target) => {
+    try {
+      await gapi("/files/" + f.id, { method: "PATCH", params: { fields: "id" }, body: { properties: { merge_into: target.id } } });
+      f.properties = Object.assign({}, f.properties, { merge_into: target.id });
+      toast(`Verzoek gedaan: samenvoegen met "${target.name}" (controle op laptop)`);
+      renderItems();
+    } catch (e) { toast("Mislukt: " + e.message.slice(0, 80)); }
+  });
+  if (cancel) cancel.onclick = async () => {
+    try {
+      await gapi("/files/" + f.id, { method: "PATCH", params: { fields: "id" }, body: { properties: { merge_into: null } } });
+      const p = Object.assign({}, f.properties); delete p.merge_into; f.properties = p;
+      renderItems();
+    } catch (e) { toast("Mislukt: " + e.message.slice(0, 80)); }
+  };
 }
 
 // ------------------------------------------------------------------ selecteren
@@ -559,6 +650,7 @@ function updateBulk() {
     b.innerHTML = `<div class="info">${n} geselecteerd</div>
       <button class="btn" id="bk-all">Alles</button>
       <button class="btn danger" id="bk-weg" ${n ? "" : "disabled"}>🗑 Weg</button>
+      <button class="btn" id="bk-mv" ${n ? "" : "disabled"}>📁 Verplaats…</button>
       <button class="btn ok" id="bk-houd" ${n ? "" : "disabled"}>✓ Houden</button>
       <button class="btn" id="bk-clear" ${n ? "" : "disabled"}>Wis</button>`;
     $("bk-all").onclick = selectAllVisible;
@@ -567,6 +659,7 @@ function updateBulk() {
       await setMarks(files, v); S.selected = new Set(); renderItems();
       toast(v === "weg" ? `${files.length} gemarkeerd als weg` : v === "houd" ? `${files.length} behouden` : "Markering gewist");
     };
+    $("bk-mv").onclick = () => moveFilesDialog(selectedFiles(), () => { S.selected = new Set(); renderItems(); });
     $("bk-weg").onclick = act("weg"); $("bk-houd").onclick = act("houd"); $("bk-clear").onclick = act("");
   }
 }
@@ -608,12 +701,14 @@ function renderViewer() {
     ${album ? "" : `<div class="vbar">
       <button class="btn danger" id="v-weg">🗑 Weg</button>
       <button class="btn ok" id="v-houd">✓ Houden</button>
+      <button class="btn" id="v-mv">📁</button>
       <button class="btn" id="v-clear">Wis</button></div>`}`;
   setImg($("v-photo"), f, 1200);
   $("v-close").onclick = closeViewer;
   $("v-prev").onclick = () => nav(-1); $("v-next").onclick = () => nav(1);
   if (!album) {
     const act = (val) => async () => { await setMarks([f], val); if (val) nav(1, true); else renderViewer(); };
+    $("v-mv").onclick = () => moveFilesDialog([f], () => renderViewer());
     $("v-weg").onclick = act("weg"); $("v-houd").onclick = act("houd"); $("v-clear").onclick = act("");
   }
   // voorladen
