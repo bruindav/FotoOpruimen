@@ -362,6 +362,7 @@ window.addEventListener("popstate", () => {
   if (kind === "viewer") hideViewer();
   else if (kind === "sheet") hideSheet();
   else if (kind === "select") { exitSelect(); if (S.items.length) renderItems(); }
+  else if (kind === "yearfolder") { exitSelect(); S.yearFolder = null; renderItems(); }
   else if (kind === "list") { exitSelect(); S.tab === "clean" ? renderCleanHome() : renderAlbumsHome(); }
 });
 
@@ -445,7 +446,7 @@ async function openYear(y) {
   await loadItems(`properties has { key='fa' and value='1' } and properties has { key='yr' and value='${y}' } and trashed=false`, "Jaar " + y, "name");
 }
 async function loadItems(q, title, orderBy) {
-  if (navTop() !== "list") pushNav("list");
+  if (navTop() !== "list" && navTop() !== "yearfolder") pushNav("list");
   setHeader(title, true);
   exitSelect();
   const c = $("content");
@@ -485,12 +486,12 @@ function renderYearFolders() {
     const q = $("yf-search").value.toLowerCase(); const list = $("yf-list"); list.innerHTML = "";
     const all = document.createElement("button"); all.className = "row";
     all.innerHTML = `<span>🖼️</span><span class="name">Alle foto's van ${esc(S.current.year)}</span><span class="count">${S.items.length} ›</span>`;
-    all.onclick = () => { S.yearFolder = "*"; renderItems(); };
+    all.onclick = () => { S.yearFolder = "*"; pushNav("yearfolder"); renderItems(); };
     if (!q) list.appendChild(all);
     rows.filter((r) => r.name.toLowerCase().includes(q)).forEach((r) => {
       const b = document.createElement("button"); b.className = "row";
       b.innerHTML = `<span>📁</span><span class="name">${esc(r.name)}</span><span class="count">${r.arr.length} ›</span>`;
-      b.onclick = () => { S.yearFolder = r.k; renderItems(); };
+      b.onclick = () => { S.yearFolder = r.k; pushNav("yearfolder"); renderItems(); };
       list.appendChild(b);
     });
   };
@@ -508,7 +509,7 @@ function renderItems() {
   c.innerHTML = yBack + mergeBarHtml() + chips + '<div class="grid' + (S.selecting ? " selecting" : "") + '" id="grid"></div><div class="spacer"></div>';
   c.querySelectorAll(".chip").forEach((b) => b.onclick = () => { S.filter = b.dataset.f; renderItems(); });
   wireMergeBar();
-  if ($("yf-back")) $("yf-back").onclick = () => { S.yearFolder = null; exitSelect(); renderItems(); };
+  if ($("yf-back")) $("yf-back").onclick = () => goBack();
   const grid = $("grid"); const vis = visibleItems();
   if (!vis.length) grid.innerHTML = '<div class="muted" style="padding:20px 0">Niets te tonen.</div>';
   vis.forEach((f, idx) => grid.appendChild(makeTile(f, idx)));
@@ -856,7 +857,7 @@ function setTabNow(t) {
 }
 $("tab-clean").onclick = () => setTab("clean");
 $("tab-albums").onclick = () => setTab("albums");
-$("btn-back").onclick = () => { if (navTop() === "list") goBack(); else setTab(S.tab); };
+$("btn-back").onclick = () => { if (navTop() === "list" || navTop() === "yearfolder") goBack(); else setTab(S.tab); };
 $("btn-select").onclick = () => {
   if (S.selecting) { if (navTop() === "select") goBack(); else { exitSelect(); renderItems(); } return; }
   S.selecting = true; S.selected = new Set(); pushNav("select");
