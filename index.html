@@ -441,7 +441,7 @@ async function openFolder(f) {
   await loadItems(`'${f.id}' in parents and trashed=false`, f.name, "name");
 }
 async function openYear(y) {
-  S.view = "year"; S.current = { year: y, name: "Jaar " + y }; S.filter = "all";
+  S.view = "year"; S.current = { year: y, name: "Jaar " + y }; S.filter = "all"; S.yearFolder = null;
   await loadItems(`properties has { key='fa' and value='1' } and properties has { key='yr' and value='${y}' } and trashed=false`, "Jaar " + y, "name");
 }
 async function loadItems(q, title, orderBy) {
@@ -466,20 +466,49 @@ function counts() {
 }
 function visibleItems() {
   return S.items.filter((f) => {
+    if (S.view === "year" && S.yearFolder && S.yearFolder !== "*" && ((f.parents || [])[0] || "?") !== S.yearFolder) return false;
     const m = mark(f), mv = f.properties && f.properties.mv;
     return S.filter === "all" || (S.filter === "open" && !m && !mv) || S.filter === m || (S.filter === "move" && mv);
   });
 }
 
+function renderYearFolders() {
+  const c = $("content");
+  const groups = {};
+  S.items.forEach((f) => { const k = (f.parents || [])[0] || "?"; (groups[k] = groups[k] || []).push(f); });
+  const rows = Object.entries(groups).map(([k, arr]) => ({ k, arr, name: (S.folderNames && S.folderNames[k]) || "(onbekende map)" }))
+    .sort((a, b) => a.name.localeCompare(b.name, "nl", { numeric: true }));
+  c.innerHTML = `<div class="card" style="padding:12px"><h2 style="margin-left:4px">Mappen in ${esc(S.current.year)} (${S.items.length} foto's)</h2>
+    <input type="text" id="yf-search" placeholder="Zoek map…" style="margin-bottom:10px">
+    <div class="list" id="yf-list"></div></div><div class="spacer"></div>`;
+  const draw = () => {
+    const q = $("yf-search").value.toLowerCase(); const list = $("yf-list"); list.innerHTML = "";
+    const all = document.createElement("button"); all.className = "row";
+    all.innerHTML = `<span>🖼️</span><span class="name">Alle foto's van ${esc(S.current.year)}</span><span class="count">${S.items.length} ›</span>`;
+    all.onclick = () => { S.yearFolder = "*"; renderItems(); };
+    if (!q) list.appendChild(all);
+    rows.filter((r) => r.name.toLowerCase().includes(q)).forEach((r) => {
+      const b = document.createElement("button"); b.className = "row";
+      b.innerHTML = `<span>📁</span><span class="name">${esc(r.name)}</span><span class="count">${r.arr.length} ›</span>`;
+      b.onclick = () => { S.yearFolder = r.k; renderItems(); };
+      list.appendChild(b);
+    });
+  };
+  $("yf-search").oninput = draw; draw();
+}
+
 function renderItems() {
+  if (S.view === "year" && !S.yearFolder) { renderYearFolders(); return; }
   const c = $("content"); const n = counts();
   const isAlbum = S.view === "album";
   const chips = isAlbum ? "" : `<div class="filters">
       ${[["all", "Alles " + S.items.length], ["open", "Open " + n.open], ["weg", "Weg " + n.weg], ["houd", "Behouden " + n.houd], ["move", "Verplaatsen " + n.move]]
         .map(([k, l]) => `<button class="chip ${S.filter === k ? "active" : ""}" data-f="${k}">${l}</button>`).join("")}</div>`;
-  c.innerHTML = mergeBarHtml() + chips + '<div class="grid' + (S.selecting ? " selecting" : "") + '" id="grid"></div><div class="spacer"></div>';
+  const yBack = S.view === "year" ? `<div style="margin:0 0 8px"><button class="chip" id="yf-back">‹ Alle mappen van ${esc(S.current.year)}</button> <b>${S.yearFolder === "*" ? "Alle foto's" : esc((S.folderNames && S.folderNames[S.yearFolder]) || "")}</b></div>` : "";
+  c.innerHTML = yBack + mergeBarHtml() + chips + '<div class="grid' + (S.selecting ? " selecting" : "") + '" id="grid"></div><div class="spacer"></div>';
   c.querySelectorAll(".chip").forEach((b) => b.onclick = () => { S.filter = b.dataset.f; renderItems(); });
   wireMergeBar();
+  if ($("yf-back")) $("yf-back").onclick = () => { S.yearFolder = null; exitSelect(); renderItems(); };
   const grid = $("grid"); const vis = visibleItems();
   if (!vis.length) grid.innerHTML = '<div class="muted" style="padding:20px 0">Niets te tonen.</div>';
   vis.forEach((f, idx) => grid.appendChild(makeTile(f, idx)));
