@@ -129,6 +129,9 @@
   #viewer .vstate.weg { background: var(--danger); } #viewer .vstate.houd { background: var(--ok); }
   #viewer .vnav { position: absolute; top: 0; bottom: 0; width: 22%; background: none; border: 0; color: #fff; font-size: 34px; opacity: .55; }
   #viewer .vnav.l { left: 0; text-align: left; padding-left: 10px; } #viewer .vnav.r { right: 0; text-align: right; padding-right: 10px; }
+  #viewer.show .vtop, #viewer.show .vbar, #viewer.show .vnav { display: none; }
+  #viewer.show.pauzed .vtop { display: flex; }
+  #viewer .vimg img { transition: opacity .4s; }
   #viewer .vbar { display: flex; gap: 8px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: rgba(0,0,0,.75); }
   #viewer .vbar .btn { flex: 1; min-height: 56px; font-size: 17px; }
 
@@ -507,13 +510,14 @@ function renderItems() {
   if (S.view === "year" && !S.yearFolder) { renderYearFolders(); return; }
   const c = $("content"); const n = counts();
   const isAlbum = S.view === "album";
-  const chips = isAlbum ? "" : `<div class="filters">
+  const chips = isAlbum ? `<div class="filters"><button class="chip" id="album-show">▶ Diavoorstelling (${S.items.length})</button></div>` : `<div class="filters">
       ${[["all", "Alles " + S.items.length], ["open", "Open " + n.open], ["weg", "Weg " + n.weg], ["houd", "Behouden " + n.houd], ["move", "Verplaatsen " + n.move]]
         .map(([k, l]) => `<button class="chip ${S.filter === k ? "active" : ""}" data-f="${k}">${l}</button>`).join("")}</div>`;
   const yBack = S.view === "year" ? `<div style="margin:0 0 8px"><button class="chip" id="yf-back">‹ Alle mappen van ${esc(S.current.year)}</button> <b>${S.yearFolder === "*" ? "Alle foto's" : esc((S.folderNames && S.folderNames[S.yearFolder]) || "")}</b></div>` : "";
   c.innerHTML = yBack + mergeBarHtml() + chips + '<div class="grid' + (S.selecting ? " selecting" : "") + '" id="grid"></div><div class="spacer"></div>';
   c.querySelectorAll(".chip").forEach((b) => b.onclick = () => { S.filter = b.dataset.f; renderItems(); });
   wireMergeBar();
+  if ($("album-show")) $("album-show").onclick = () => { if (S.items.length) { openViewer(0); startShow(); } };
   if ($("yf-back")) $("yf-back").onclick = () => goBack();
   const grid = $("grid"); const vis = visibleItems();
   if (!vis.length) grid.innerHTML = '<div class="muted" style="padding:20px 0">Niets te tonen.</div>';
@@ -723,6 +727,7 @@ function openViewer(idx) {
 }
 function closeViewer() { if (navTop() === "viewer") goBack(); else hideViewer(); }
 function hideViewer(quiet) {
+  stopShow();
   $("viewer").classList.add("hidden"); document.body.style.overflow = "";
   if (!quiet && S.view !== "home") renderItems();
 }
@@ -733,7 +738,7 @@ function renderViewer() {
   const album = S.view === "album";
   const v = $("viewer");
   v.innerHTML = `
-    <div class="vtop"><button class="btn small" id="v-close">✕</button>
+    <div class="vtop"><button class="btn small" id="v-close">✕</button><button class="btn small" id="v-show" title="Diavoorstelling">▶</button>
       <div class="vtitle"><div>${esc(cleanName(f.name))}</div><div>${esc(folder)} · ${vIndex + 1}/${vList.length}</div></div></div>
     <div class="vimg ${m}" id="v-img">
       ${m ? `<span class="vstate ${m}">${m === "weg" ? "🗑 weg" : "✓ behouden"}</span>` : ""}
@@ -745,8 +750,10 @@ function renderViewer() {
       <button class="btn ok" id="v-houd">✓ Houden</button>
       <button class="btn" id="v-mv">📁</button>
       <button class="btn" id="v-clear">Wis</button></div>`}`;
-  setImg($("v-photo"), f, 1200);
+  setImg($("v-photo"), f, (showTimer || showPaused) ? 1920 : 1200);
   $("v-close").onclick = closeViewer;
+  $("v-show").onclick = () => startShow();
+  $("viewer").classList.toggle("show", !!showTimer || showPaused);
   $("v-prev").onclick = () => nav(-1); $("v-next").onclick = () => nav(1);
   if (!album) {
     const act = (val) => async () => { await setMarks([f], val); if (val) nav(1, true); else renderViewer(); };
@@ -756,6 +763,28 @@ function renderViewer() {
   // voorladen
   [vList[vIndex + 1], vList[vIndex - 1]].forEach((n) => { if (n && n.thumbnailLink) new Image().src = thumbUrl(n, 1200); });
 }
+// ---- diavoorstelling (ook handig om de telefoon naar een tv/Chromecast te casten)
+let showTimer = null, showPaused = false, wakeLock = null;
+async function startShow() {
+  showPaused = false; clearInterval(showTimer);
+  const v = $("viewer"); v.classList.add("show"); v.classList.remove("pauzed");
+  try { if (v.requestFullscreen) await v.requestFullscreen(); } catch (e) {}
+  try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
+  showTimer = setInterval(() => { vIndex = (vIndex + 1) % vList.length; renderViewer(); }, 6000);
+  if (!lsGet("fo_cast_hint")) { lsSet("fo_cast_hint", "1"); toast("Tip: tik op het scherm om te pauzeren. Casten: veeg het snelmenu open en kies 'Scherm casten'."); }
+}
+function stopShow() {
+  clearInterval(showTimer); showTimer = null; showPaused = false;
+  $("viewer").classList.remove("show", "pauzed");
+  try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
+  try { if (wakeLock) { wakeLock.release(); wakeLock = null; } } catch (e) {}
+}
+$("viewer").addEventListener("click", (e) => {      // tik tijdens de voorstelling = pauze / hervat
+  const v = $("viewer"); if (!v.classList.contains("show") || e.target.closest(".vtop")) return;
+  if (showTimer) { clearInterval(showTimer); showTimer = null; showPaused = true; v.classList.add("pauzed"); }
+  else { startShow(); }
+});
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && showTimer) stopShow(); });
 function nav(d, fromMark) {
   const n = vIndex + d;
   if (n < 0 || n >= vList.length) { if (fromMark) { toast("Einde van de lijst"); closeViewer(); } return; }
