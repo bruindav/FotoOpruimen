@@ -552,12 +552,13 @@ function setMove(files, folder) {
 }
 
 // Keuzemenu met zoekvak om een map te kiezen (voor verplaatsen / samenvoegen)
-function pickFolder(title, excludeId, onPick) {
+function pickFolder(title, excludeId, onPick, initialQuery) {
   const sh = $("sheet");
   pushNav("sheet");
   sh.className = "sheet-bg";
   sh.innerHTML = `<div class="sheet"><h3>${esc(title)}</h3>
-    <input type="text" id="pick-search" placeholder="Zoek map…" style="margin-bottom:10px">
+    <input type="text" id="pick-search" placeholder="Zoek map…" style="margin-bottom:6px">
+    <div class="muted" id="pick-hint" style="font-size:12px;margin-bottom:8px"></div>
     <div class="list" id="pick-list"></div>
     <button class="btn" id="sheet-cancel" style="width:100%;margin-top:12px">Annuleren</button></div>`;
   $("sheet-cancel").onclick = closeSheet;
@@ -565,25 +566,31 @@ function pickFolder(title, excludeId, onPick) {
   const draw = () => {
     const q = $("pick-search").value.toLowerCase();
     const list = $("pick-list"); list.innerHTML = "";
-    S.folders.filter((f) => f.id !== excludeId && f.name.toLowerCase().includes(q)).slice(0, 200).forEach((f) => {
+    const found = S.folders.filter((f) => f.id !== excludeId && f.name.toLowerCase().includes(q));
+    $("pick-hint").textContent = q ? `${found.length} map(pen) met "${$("pick-search").value}" — wis het zoekvak om alle ${S.folders.length} mappen (met submappen) te zien.` : `${found.length} mappen, inclusief alle submappen.`;
+    found.slice(0, 600).forEach((f) => {
       const b = document.createElement("button"); b.className = "row pick-row";
-      b.innerHTML = `<span>📁</span><span class="name">${esc(f.name)}</span>`;
+      const parts = f.name.split(" / "); const last = parts.pop();
+      b.innerHTML = `<span>${parts.length ? "↳" : "📁"}</span><span class="name">${parts.length ? `<span class="muted" style="font-size:11.5px">${esc(parts.join(" / "))} /</span><br>` : ""}${esc(last)}</span>`;
       b.onclick = () => { closeSheet(); onPick(f); };
       list.appendChild(b);
     });
     if (!list.children.length) list.innerHTML = '<div class="muted">Geen mappen gevonden.</div>';
   };
+  if (initialQuery) $("pick-search").value = initialQuery;
   $("pick-search").oninput = draw; draw();
 }
 
 async function moveFilesDialog(files, afterDone) {
   if (!files.length) return;
   const cur = S.view === "folder" ? S.current.id : null;
+  // Vanuit een jaar-overzicht: begin met de mappen van dat jaar (wis het zoekvak voor alle mappen)
+  const yearQuery = S.view === "year" && S.current && S.current.year ? String(S.current.year) : "";
   pickFolder(`Verplaats ${files.length} foto('s) naar…`, cur, async (folder) => {
     const failed = await setMove(files, folder);
     toast(failed ? "Niet alles gelukt" : `${files.length} foto('s) staan klaar om naar "${folder.name}" te verhuizen (controle op laptop)`);
     afterDone();
-  });
+  }, yearQuery);
 }
 
 // ------------------------------------------------------------------ map samenvoegen
