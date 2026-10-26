@@ -374,23 +374,25 @@ async function findPreviewRoot() {
   S.previewRoot = res[0].id; return S.previewRoot;
 }
 
-async function renderCleanHome() {
+async function renderCleanHome(force) {
   S.view = "home"; S.current = null; S.items = [];
   setHeader("Foto Opruimen", false);
   const c = $("content");
-  c.innerHTML = '<div class="loading">Mappen laden…</div>';
+  const cached = !force && S.folders && S.counts;       // mappen en aantallen blijven bewaard tot de app herstart of je op ↻ drukt
+  if (!cached) c.innerHTML = '<div class="loading">Mappen laden…</div>';
   try {
     const root = await findPreviewRoot();
-    S.folders = await listAll(`'${root}' in parents and trashed=false and mimeType='${FOLDER}'`, "id,name,properties", { orderBy: "name" });
-    S.folderNames = Object.fromEntries(S.folders.map((f) => [f.id, f.name]));
+    if (!cached) S.folders = await listAll(`'${root}' in parents and trashed=false and mimeType='${FOLDER}'`, "id,name,properties", { orderBy: "name" });
+    if (!cached) S.folderNames = Object.fromEntries(S.folders.map((f) => [f.id, f.name]));
   } catch (e) { c.innerHTML = `<div class="card"><h2>Niets gevonden</h2><p class="muted">${esc(e.message)}</p></div>`; return; }
 
   const thisYear = new Date().getFullYear();
   let years = "";
   for (let y = thisYear; y >= 1990; y--) years += `<option value="${y}">${y}</option>`;
   c.innerHTML = `
-    <div class="summary"><span class="pill">Markeringen "weg": <b id="weg-count">…</b></span>
-      <span class="pill">Mappen: <b>${S.folders.length}</b></span></div>
+    <div class="summary"><span class="pill">Markeringen "weg": <b id="weg-count">${S.weg ?? "…"}</b></span>
+      <span class="pill">Mappen: <b>${S.folders.length}</b></span>
+      <button class="chip" id="recount">↻ Opnieuw tellen</button></div>
     <div class="card"><h2>Per jaar</h2>
       <select id="year-sel"><option value="">Kies een jaar…</option>${years}</select></div>
     <div class="card" style="padding:12px"><h2 style="margin-left:4px">Per map</h2>
@@ -416,7 +418,10 @@ async function renderCleanHome() {
     });
     if (!list.children.length) list.innerHTML = '<div class="muted">Geen mappen gevonden.</div>';
   };
-  $("folder-search").oninput = draw; S.counts = null; draw();
+  $("folder-search").oninput = draw; draw();
+  $("recount").onclick = () => { S.counts = null; renderCleanHome(true); };
+  if (cached) { listAll("properties has { key='mark' and value='weg' } and trashed=false", "id").then((r) => { S.weg = r.length; const el = $("weg-count"); if (el) el.textContent = r.length; }).catch(() => {}); return; }
+  S.counts = null; draw();
   // aantal foto's per map ophalen (op de achtergrond), zodat lege mappen een andere kleur krijgen
   const counts = {};
   const folderIds = new Set(S.folders.map((f) => f.id));
