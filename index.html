@@ -488,6 +488,7 @@ function renderYearFolders() {
   const rows = Object.entries(groups).map(([k, arr]) => ({ k, arr, name: (S.folderNames && S.folderNames[k]) || "(onbekende map)" }))
     .sort((a, b) => a.name.localeCompare(b.name, "nl", { numeric: true }));
   c.innerHTML = `<div class="card" style="padding:12px"><h2 style="margin-left:4px">Mappen in ${esc(S.current.year)} (${S.items.length} foto's)</h2>
+    <p class="muted" style="margin:0 4px 10px">Foto's staan hier op de <b>opnamedatum uit de foto zelf</b>. Een map uit een ander jaar bevat dus foto's met een afwijkende camera-datum (bijv. klok niet goed gezet, of reis rond de jaarwisseling).</p>
     <input type="text" id="yf-search" placeholder="Zoek map…" style="margin-bottom:10px">
     <div class="list" id="yf-list"></div></div><div class="spacer"></div>`;
   const draw = () => {
@@ -498,7 +499,7 @@ function renderYearFolders() {
     if (!q) list.appendChild(all);
     rows.filter((r) => r.name.toLowerCase().includes(q)).forEach((r) => {
       const b = document.createElement("button"); b.className = "row";
-      b.innerHTML = `<span>📁</span><span class="name">${esc(r.name)}</span><span class="count">${r.arr.length} ›</span>`;
+      b.innerHTML = `<span>📁</span><span class="name">${esc(r.name)}</span><span class="count">${r.arr.length}${S.counts && S.counts[r.k] > r.arr.length ? " van " + S.counts[r.k] : ""} ›</span>`;
       b.onclick = () => { S.yearFolder = r.k; pushNav("yearfolder"); renderItems(); };
       list.appendChild(b);
     });
