@@ -100,6 +100,7 @@
   }
   .tile.weg .badge { background: var(--danger); }
   .tile.houd .badge { background: var(--ok); }
+  .tile .dmflag { position: absolute; left: 4px; bottom: 4px; font-size: 11px; padding: 1px 6px; border-radius: 99px; background: rgba(0,0,0,.72); color: #ffd27a; }
   .tile .check {
     position: absolute; right: 6px; top: 6px; width: 26px; height: 26px; border-radius: 50%;
     border: 2px solid #fff; background: rgba(0,0,0,.4); display: none; align-items: center; justify-content: center; font-weight: 700;
@@ -526,6 +527,10 @@ function renderItems() {
   updateBulk();
 }
 
+function dateMismatch(f) {      // opnamedatum (EXIF-jaar) wijkt af van het jaar van de map
+  const pr = f.properties || {};
+  return pr.ey && pr.yr && pr.ey !== pr.yr ? { ey: pr.ey, yr: pr.yr } : null;
+}
 function makeTile(f, idx) {
   const w = f.imageMediaMetadata && f.imageMediaMetadata.width, h = f.imageMediaMetadata && f.imageMediaMetadata.height;
   const ratio = w && h ? w / h : 1.33;
@@ -539,9 +544,10 @@ function makeTile(f, idx) {
   if (m) t.classList.add(m);
   if (mv) t.classList.add("mv");
   if (S.selected.has(f.id)) t.classList.add("selected");
+  const dm = dateMismatch(f);
   const img = document.createElement("img"); img.loading = "lazy"; img.alt = "";
   setImg(img, f, 400); t.appendChild(img);
-  t.insertAdjacentHTML("beforeend", (m ? `<span class="badge">${m === "weg" ? "🗑 weg" : "✓"}</span>` : mv ? `<span class="badge">→ ${esc(S.folderNames[mv] || "map")}</span>` : "") + '<span class="check">✓</span>');
+  t.insertAdjacentHTML("beforeend", (m ? `<span class="badge">${m === "weg" ? "🗑 weg" : "✓"}</span>` : mv ? `<span class="badge">→ ${esc(S.folderNames[mv] || "map")}</span>` : "") + (dm ? `<span class="dmflag" title="Datum in de foto wijkt af van de map">⚠ camera ${dm.ey}</span>` : "") + '<span class="check">✓</span>');
   t.onclick = () => {
     if (S.selecting) toggleSelect(f.id, t);
     else openViewer(idx);
@@ -740,7 +746,7 @@ function renderViewer() {
   const v = $("viewer");
   v.innerHTML = `
     <div class="vtop"><button class="btn small" id="v-close">✕</button><button class="btn small" id="v-show" title="Diavoorstelling">▶</button>
-      <div class="vtitle"><div>${esc(cleanName(f.name))}</div><div>${esc(folder)} · ${vIndex + 1}/${vList.length}</div></div></div>
+      <div class="vtitle"><div>${esc(cleanName(f.name))}</div><div>${esc(folder)} · ${vIndex + 1}/${vList.length}</div>${dateMismatch(f) ? `<div style="color:#ffd27a">⚠ datum in foto: ${dateMismatch(f).ey}, map: ${dateMismatch(f).yr}</div>` : ""}</div></div>
     <div class="vimg ${m}" id="v-img">
       ${m ? `<span class="vstate ${m}">${m === "weg" ? "🗑 weg" : "✓ behouden"}</span>` : ""}
       <img alt="" id="v-photo">
