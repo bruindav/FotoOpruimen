@@ -425,7 +425,7 @@ async function renderCleanHome(force) {
       <label class="opt"><input type="checkbox" id="hide-empty"> Verberg lege mappen <span id="count-status" class="muted"></span></label>
       <div class="list" id="folder-list"></div></div>`;
   $("year-sel").onchange = (e) => { if (e.target.value) openYear(e.target.value); };
-  $("hide-empty").checked = lsGet("fo_hide_empty") === "1";
+  $("hide-empty").checked = lsGet("fo_hide_empty") !== "0";   // standaard lege (bovenliggende) mappen verbergen
   $("hide-empty").onchange = () => { lsSet("fo_hide_empty", $("hide-empty").checked ? "1" : "0"); draw(); };
   const draw = () => {
     const q = $("folder-search").value.toLowerCase();
@@ -444,20 +444,24 @@ async function renderCleanHome(force) {
     if (!list.children.length) list.innerHTML = '<div class="muted">Geen mappen gevonden.</div>';
   };
   $("folder-search").oninput = draw; draw();
-  $("recount").onclick = () => { S.counts = null; renderCleanHome(true); };
+  $("recount").onclick = () => { if (S.countJob) { toast("Er wordt al geteld"); return; } S.counts = null; renderCleanHome(true); };
   if (cached) { listAll("properties has { key='mark' and value='weg' } and trashed=false", "id").then((r) => { S.weg = r.length; const el = $("weg-count"); if (el) el.textContent = r.length; }).catch(() => {}); return; }
   S.counts = null; draw();
   // aantal foto's per map ophalen (op de achtergrond), zodat lege mappen een andere kleur krijgen
-  const counts = {};
-  const folderIds = new Set(S.folders.map((f) => f.id));
-  listAll("properties has { key='fa' and value='1' } and trashed=false", "parents", {
-    onPage: (items) => { const st = $("count-status"); if (st) st.textContent = `(tellen… ${items.length})`; },
-  }).then((items) => {
-    items.forEach((it) => (it.parents || []).forEach((p) => { counts[p] = (counts[p] || 0) + 1; }));
-    S.counts = counts;
-    const st = $("count-status"); if (st) st.textContent = "";
-    if (S.view === "home" && $("folder-list")) draw();
-  }).catch(() => { const st = $("count-status"); if (st) st.textContent = ""; });
+  // aantal foto's per map (op de achtergrond, maar nooit twee tellingen tegelijk)
+  if (!S.countJob) {
+    S.countJob = listAll("properties has { key='fa' and value='1' } and trashed=false", "parents", {
+      onPage: (items) => { S.countProgress = items.length; const st = $("count-status"); if (st) st.textContent = `(tellen… ${items.length})`; },
+    }).then((items) => {
+      const counts = {};
+      items.forEach((it) => (it.parents || []).forEach((p) => { counts[p] = (counts[p] || 0) + 1; }));
+      S.counts = counts; S.countJob = null;
+      const st = $("count-status"); if (st) st.textContent = "";
+      if (S.view === "home" && $("folder-list")) draw();
+    }).catch(() => { S.countJob = null; const st = $("count-status"); if (st) st.textContent = ""; });
+  } else {
+    const st = $("count-status"); if (st) st.textContent = `(tellen… ${S.countProgress || ""})`;
+  }
   // totaal aantal 'weg' op de achtergrond
   listAll("properties has { key='mark' and value='weg' } and trashed=false", "id").then((r) => {
     S.weg = r.length; const el = $("weg-count"); if (el) el.textContent = r.length;
