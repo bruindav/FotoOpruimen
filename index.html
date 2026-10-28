@@ -194,11 +194,12 @@
       <button class="btn small hidden" id="btn-back">←</button>
       <img src="favicon-32.png" alt="" width="28" height="28" style="border-radius:7px"><h1 id="title">Foto App</h1>
       <button class="btn small" id="btn-select">Selecteren</button>
+      <button class="btn small" id="btn-beheer" title="Beheer">⚙</button>
       <button class="btn small" id="btn-logout">Uit</button>
     </div>
     <div class="tabs">
       <button class="tab active" id="tab-look">👁 Kijken</button>
-      <button class="tab" id="tab-clean">🧹 Opschonen</button>
+      <button class="tab hidden" id="tab-clean">🧹 Opschonen</button>
       <button class="tab" id="tab-albums">🖼 Albums</button>
     </div>
   </header>
@@ -1156,8 +1157,11 @@ async function removeFromAlbum() {
 
 // ------------------------------------------------------------------ navigatie
 function setTab(t) { unwindThen(() => setTabNow(t)); }
+const isAdmin = () => lsGet("fo_admin") === "1";
+function applyAdmin() { $("tab-clean").classList.toggle("hidden", !isAdmin()); }
 function setTabNow(t) {
-  S.tab = t; S.look = t === "look"; lsSet("fo_tab", t);
+  if (t === "clean" && !isAdmin()) t = "look";
+  S.tab = t; S.look = t === "look" || (t === "albums" && !isAdmin());
   $("tab-look").classList.toggle("active", t === "look");
   $("tab-clean").classList.toggle("active", t === "clean");
   $("tab-albums").classList.toggle("active", t === "albums");
@@ -1165,6 +1169,19 @@ function setTabNow(t) {
   if (t === "clean" || t === "look") renderCleanHome(); else renderAlbumsHome();
 }
 $("tab-look").onclick = () => setTab("look");
+$("btn-beheer").onclick = () => {
+  const sh = $("sheet"); pushNav("sheet"); sh.className = "sheet-bg";
+  sh.innerHTML = `<div class="sheet"><h3>Beheer</h3>
+    <label class="opt" style="display:flex;gap:10px;align-items:center;margin:8px 0 14px"><input type="checkbox" id="adm-on" ${isAdmin() ? "checked" : ""}> <span>Opruimen tonen (foto's markeren als weg, verplaatsen, albums bewerken)</span></label>
+    <button class="btn" id="sheet-cancel" style="width:100%">Sluiten</button></div>`;
+  $("sheet-cancel").onclick = closeSheet;
+  sh.onclick = (e) => { if (e.target === sh) closeSheet(); };
+  $("adm-on").onchange = (e) => {
+    lsSet("fo_admin", e.target.checked ? "1" : "0"); applyAdmin(); closeSheet();
+    if (!e.target.checked && S.tab === "clean") setTab("look"); else if (S.tab === "albums") setTab("albums");
+    else if (e.target.checked) toast("Opschonen staat nu naast Kijken. De app start altijd in de viewer.");
+  };
+};
 $("tab-clean").onclick = () => setTab("clean");
 $("tab-albums").onclick = () => setTab("albums");
 $("btn-back").onclick = () => { if (navTop() === "list" || navTop() === "yearfolder") goBack(); else setTab(S.tab); };
@@ -1192,7 +1209,7 @@ $("btn-login").onclick = async () => {
   catch (e) { $("login-msg").textContent = "Inloggen mislukt: " + e.message; }
 };
 
-function enterApp() { showView("app"); initHistory(); setTabNow(lsGet("fo_tab") === "clean" || lsGet("fo_tab") === "albums" ? lsGet("fo_tab") : "look"); }
+function enterApp() { showView("app"); initHistory(); applyAdmin(); setTabNow(lsGet("fo_tab") === "albums" ? "albums" : "look"); }   // altijd starten in de viewer
 
 async function start() {
   // client-id via link: foto_opruimen.html#client=....apps.googleusercontent.com
