@@ -409,6 +409,15 @@ async function renderCleanHome(force) {
     const root = await findPreviewRoot();
     if (!cached) S.folders = await listAll(`'${root}' in parents and trashed=false and mimeType='${FOLDER}'`, "id,name,properties", { orderBy: "name" });
     if (!cached) S.folderNames = Object.fromEntries(S.folders.map((f) => [f.id, f.name]));
+    if (!cached) {
+      // tijdstip van de laatste sync op de laptop; alleen als dat verandert hoeven de aantallen opnieuw geteld te worden
+      let sync = "";
+      try { const r = await gapi(`/files/${root}`, { params: { fields: "properties" } }); sync = (r.properties || {}).last_sync || ""; } catch (e) {}
+      S.previewSync = sync;
+      if (!force && !S.counts) {
+        try { const st = JSON.parse(lsGet("fo_counts") || "null"); if (st && st.root === root && st.sync === sync) S.counts = st.counts; } catch (e) {}
+      }
+    }
   } catch (e) { c.innerHTML = `<div class="card"><h2>Niets gevonden</h2><p class="muted">${esc(e.message)}</p></div>`; return; }
 
   const thisYear = new Date().getFullYear();
@@ -445,7 +454,7 @@ async function renderCleanHome(force) {
   };
   $("folder-search").oninput = draw; draw();
   $("recount").onclick = () => { if (S.countJob) { toast("Er wordt al geteld"); return; } S.counts = null; renderCleanHome(true); };
-  if (cached) { listAll("properties has { key='mark' and value='weg' } and trashed=false", "id").then((r) => { S.weg = r.length; const el = $("weg-count"); if (el) el.textContent = r.length; }).catch(() => {}); return; }
+  if (cached || S.counts) { listAll("properties has { key='mark' and value='weg' } and trashed=false", "id").then((r) => { S.weg = r.length; const el = $("weg-count"); if (el) el.textContent = r.length; }).catch(() => {}); return; }
   S.counts = null; draw();
   // aantal foto's per map ophalen (op de achtergrond), zodat lege mappen een andere kleur krijgen
   // aantal foto's per map (op de achtergrond, maar nooit twee tellingen tegelijk)
@@ -456,6 +465,7 @@ async function renderCleanHome(force) {
       const counts = {};
       items.forEach((it) => (it.parents || []).forEach((p) => { counts[p] = (counts[p] || 0) + 1; }));
       S.counts = counts; S.countJob = null;
+      lsSet("fo_counts", JSON.stringify({ root: S.previewRoot, sync: S.previewSync || "", counts }));
       const st = $("count-status"); if (st) st.textContent = "";
       if (S.view === "home" && $("folder-list")) draw();
     }).catch(() => { S.countJob = null; const st = $("count-status"); if (st) st.textContent = ""; });
