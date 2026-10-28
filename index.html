@@ -136,6 +136,10 @@
   #viewer .vnav { position: absolute; top: 0; bottom: 0; width: 22%; background: none; border: 0; color: #fff; font-size: 34px; opacity: .55; }
   #viewer .vnav.l { left: 0; text-align: left; padding-left: 10px; } #viewer .vnav.r { right: 0; text-align: right; padding-right: 10px; }
   #viewer .showonly { display: none; gap: 8px; } #viewer.show .showonly { display: inline-flex; }
+  #castbar { position: fixed; left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); z-index: 70; background: #1c2230; border: 1px solid #3a4560; border-radius: 16px; padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; box-shadow: 0 6px 24px rgba(0,0,0,.5); }
+  #castbar.hidden { display: none; }
+  #castbar .ctitle { flex: 1 1 100%; font-size: 14px; color: #c9d1e3; }
+  #castbar .btn { min-width: 44px; }
   #viewer .favon { color: #ff6b81; }
   #viewer.show .vimg img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: contain; transition: opacity 1.4s ease-in-out; }
   #viewer.show.fitcover .vimg img { object-fit: cover; }
@@ -204,6 +208,7 @@
 <div id="bulk" class="bulkbar hidden"></div>
 <div id="viewer" class="hidden"></div>
 <div id="sheet" class="hidden"></div>
+<div id="castbar" class="hidden"></div>
 <div id="toast" class="hidden"></div>
 
 <script>
@@ -245,6 +250,7 @@ async function initTokenClient() {
       tokenExp = Date.now() + (parseInt(resp.expires_in || "3600", 10) - 60) * 1000;
       lsSet("fo_token", JSON.stringify({ token, tokenExp }));
       scheduleRefresh();
+      if (typeof C !== "undefined" && C.active) castSend({ cmd: "token", token });
       if (!lsGet("fo_email")) rememberEmail();
       if (w) w.resolve();
     },
@@ -587,7 +593,7 @@ function renderItems() {
   const favN = S.items.filter(isFav).length;
   document.documentElement.style.setProperty("--th", S.tileH + "px");
   const sizeName = (TILE_SIZES.find((x) => x[1] === S.tileH) || TILE_SIZES[1])[0];
-  const showChip = `<button class="chip" id="album-show">▶ Diavoorstelling</button><button class="chip" id="tile-size" title="Grootte van de foto's">▦ ${sizeName}</button>`;
+  const showChip = `<button class="chip" id="album-show">▶ Diavoorstelling</button><button class="chip" id="tile-size" title="Grootte van de foto's">▦ ${sizeName}</button>${castAppId() ? '<button class="chip" id="cast-btn">📺 Naar tv</button>' : ""}`;
   const chips = isAlbum ? `<div class="filters">${[["all", "Alles " + S.items.length], ["fav", "♥ Beste " + favN]].map(([k, l]) => `<button class="chip ${S.filter === k ? "active" : ""}" data-f="${k}">${l}</button>`).join("")}${showChip}</div>` : S.look ? `<div class="filters">${[["all", "Alles " + S.items.length], ["fav", "♥ Beste " + favN]].map(([k, l]) => `<button class="chip ${S.filter === k ? "active" : ""}" data-f="${k}">${l}</button>`).join("")}${showChip}</div>` : `<div class="filters">
       ${[["all", "Alles " + S.items.length], ["fav", "♥ " + favN], ["open", "Open " + n.open], ["weg", "Weg " + n.weg], ["houd", "Behouden " + n.houd], ["move", "Verplaatsen " + n.move]]
         .map(([k, l]) => `<button class="chip ${S.filter === k ? "active" : ""}" data-f="${k}">${l}</button>`).join("")}${showChip}</div>`;
@@ -596,6 +602,7 @@ function renderItems() {
   c.querySelectorAll(".chip").forEach((b) => b.onclick = () => { S.filter = b.dataset.f; renderItems(); });
   wireMergeBar();
   if ($("tile-size")) $("tile-size").onclick = () => { const i = TILE_SIZES.findIndex((x) => x[1] === S.tileH); S.tileH = TILE_SIZES[(i + 1) % TILE_SIZES.length][1]; lsSet("fo_tileh", String(S.tileH)); renderItems(); };
+  if ($("cast-btn")) $("cast-btn").onclick = () => startCast(visibleItems(), 0);
   if ($("album-show")) $("album-show").onclick = () => { if (visibleItems().length) { openViewer(0); startShow(true); } else toast("Geen foto's om te tonen"); };
   if ($("yf-back")) $("yf-back").onclick = () => goBack();
   const grid = $("grid"); const vis = visibleItems();
@@ -822,7 +829,7 @@ function renderViewer() {
   const album = S.view === "album";
   const v = $("viewer");
   v.innerHTML = `
-    <div class="vtop"><button class="btn small" id="v-close">✕</button><button class="btn small" id="v-show" title="Diavoorstelling">▶</button><button class="btn small ${isFav(f) ? "favon" : ""}" id="v-fav" title="Beste foto">${isFav(f) ? "♥" : "♡"}</button>
+    <div class="vtop"><button class="btn small" id="v-close">✕</button><button class="btn small" id="v-show" title="Diavoorstelling">▶</button>${castAppId() ? '<button class="btn small" id="v-cast" title="Naar tv">📺</button>' : ""}<button class="btn small ${isFav(f) ? "favon" : ""}" id="v-fav" title="Beste foto">${isFav(f) ? "♥" : "♡"}</button>
       <span class="showonly"><button class="btn small" id="v-speed" title="Snelheid">⏱ ${showCfg.sec}s</button><button class="btn small ${showCfg.shuffle ? "favon" : ""}" id="v-shuf" title="Willekeurige volgorde">🔀</button><button class="btn small" id="v-fit" title="Beeld vullen of hele foto tonen">${showCfg.fit === "cover" ? "⤡ vullen" : "⤢ passen"}</button></span>
       <div class="vtitle"><div>${esc(cleanName(f.name))}</div><div>${esc(folder)} · ${vIndex + 1}/${vList.length}</div>${dateMismatch(f) ? `<div style="color:#ffd27a">⚠ datum in foto: ${dateMismatch(f).ey}, map: ${dateMismatch(f).yr}</div>` : ""}</div></div>
     <div class="vimg ${m}" id="v-img">
@@ -838,6 +845,7 @@ function renderViewer() {
   setImg($("v-photo"), f, (showTimer || showPaused) ? 1920 : 1200);
   $("v-close").onclick = closeViewer;
   $("v-show").onclick = () => startShow();
+  if ($("v-cast")) $("v-cast").onclick = () => startCast(vList, vIndex);
   $("v-fav").onclick = async () => { await setProps([f], { fav: isFav(f) ? null : "1" }); renderViewer(); };
   $("v-speed").onclick = () => { const o = [3, 6, 10, 20]; showCfg.sec = o[(o.indexOf(showCfg.sec) + 1) % o.length]; lsSet("fo_show_sec", String(showCfg.sec)); $("v-speed").textContent = `⏱ ${showCfg.sec}s`; if (showTimer) restartShowTimer(); };
   $("v-fit").onclick = () => { showCfg.fit = showCfg.fit === "cover" ? "contain" : "cover"; lsSet("fo_show_fit", showCfg.fit); $("v-fit").textContent = showCfg.fit === "cover" ? "⤡ vullen" : "⤢ passen"; $("viewer").classList.toggle("fitcover", showCfg.fit === "cover"); };
@@ -977,6 +985,83 @@ function nav(d, fromMark) {
   if (n < 0 || n >= vList.length) { if (fromMark) { toast("Einde van de lijst"); closeViewer(); } return; }
   vIndex = n; renderViewer();
 }
+// ------------------------------------------------------------------ casten naar de tv
+// Werkt met de eigen Chromecast-ontvanger (receiver.html) en alleen in Google Chrome (niet in Vivaldi).
+const CAST_NS = "urn:x-cast:nl.fotoapp.slides";
+const DEFAULT_CAST_APP_ID = "";
+const castAppId = () => lsGet("fo_cast_app_id") || DEFAULT_CAST_APP_ID;
+const C = { loaded: null, ctx: null, session: null, active: false, st: null, listening: null };
+function loadCastSdk() {
+  if (C.loaded) return C.loaded;
+  C.loaded = new Promise((resolve) => {
+    window.__onGCastApiAvailable = (ok) => resolve(!!ok);
+    const s = document.createElement("script");
+    s.src = "https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1";
+    s.onerror = () => resolve(false);
+    document.head.appendChild(s);
+    setTimeout(() => resolve(false), 8000);
+  }).then((ok) => { if (!ok) C.loaded = null; return ok; });
+  return C.loaded;
+}
+function castSend(obj) {
+  try { return C.session ? C.session.sendMessage(CAST_NS, obj) : Promise.resolve(); } catch (e) { return Promise.resolve(); }
+}
+async function startCast(list, index) {
+  if (!castAppId()) { toast("Casten is nog niet ingesteld"); return; }
+  if (!list.length) { toast("Geen foto's om te tonen"); return; }
+  toast("Casten voorbereiden…");
+  const ok = await loadCastSdk();
+  if (!ok) { toast("Casten werkt alleen in Google Chrome (niet in Vivaldi of de tv-browser)"); return; }
+  if (!C.ctx) {
+    C.ctx = cast.framework.CastContext.getInstance();
+    C.ctx.setOptions({ receiverApplicationId: castAppId(), autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED });
+    C.ctx.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, onCastSession);
+  }
+  try { if (!C.ctx.getCurrentSession()) await C.ctx.requestSession(); }
+  catch (e) { if (e !== "cancel") toast("Verbinden met de tv mislukt: " + (e && e.description ? e.description : e)); return; }
+  attachCastSession();
+  if (!C.session) return;
+  await sendCastList(list, index);
+}
+function attachCastSession() {
+  C.session = C.ctx.getCurrentSession();
+  if (C.session && C.listening !== C.session) {
+    C.listening = C.session;
+    C.session.addMessageListener(CAST_NS, (_ns, msg) => { try { onCastMsg(typeof msg === "string" ? JSON.parse(msg) : msg); } catch (e) {} });
+  }
+}
+async function sendCastList(list, index) {
+  const items = list.filter((f) => f.thumbnailLink).map((f) => ({ i: f.id, u: f.thumbnailLink.replace(/=s\d+(-c)?$/, ""), n: cleanName(f.name) }));
+  const startAt = Math.max(0, items.findIndex((x) => list[index] && x.i === list[index].id));
+  for (let i = 0; i < items.length; i += 80) await castSend({ cmd: "list", reset: i === 0, items: items.slice(i, i + 80) });
+  await castSend({ cmd: "start", index: startAt, sec: showCfg.sec, fit: showCfg.fit, shuffle: showCfg.shuffle, play: true, token });
+  C.active = true; C.st = { pos: 0, total: items.length, playing: true };
+  renderCastBar();
+}
+function onCastSession(ev) {
+  const S_ = cast.framework.SessionState;
+  if (ev.sessionState === S_.SESSION_STARTED || ev.sessionState === S_.SESSION_RESUMED) { attachCastSession(); castSend({ cmd: "ping" }); C.active = true; renderCastBar(); }
+  else if (ev.sessionState === S_.SESSION_ENDED) { C.active = false; C.session = null; C.listening = null; renderCastBar(); }
+}
+function onCastMsg(m) { if (m && m.type === "status") { C.st = m; renderCastBar(); } }
+function renderCastBar() {
+  const b = $("castbar");
+  if (!C.active) { b.classList.add("hidden"); return; }
+  const st = C.st || {}, dev = C.session && C.session.getCastDevice ? C.session.getCastDevice().friendlyName : "tv";
+  b.classList.remove("hidden");
+  b.innerHTML = `<div class="ctitle">📺 Op ${esc(dev)} · ${st.total ? (st.pos + 1) + " / " + st.total : "…"}</div>
+    <button class="btn" id="c-prev">⏮</button><button class="btn primary" id="c-play">${st.playing === false ? "▶" : "⏸"}</button><button class="btn" id="c-next">⏭</button>
+    <button class="btn" id="c-speed">⏱ ${showCfg.sec}s</button><button class="btn ${showCfg.shuffle ? "favon" : ""}" id="c-shuf">🔀</button>
+    <button class="btn" id="c-fit">${showCfg.fit === "cover" ? "⤡ vullen" : "⤢ passen"}</button><button class="btn danger" id="c-stop">⏹ Stop</button>`;
+  $("c-prev").onclick = () => castSend({ cmd: "prev" });
+  $("c-next").onclick = () => castSend({ cmd: "next" });
+  $("c-play").onclick = () => castSend({ cmd: st.playing === false ? "play" : "pause" });
+  $("c-speed").onclick = () => { const o = [3, 6, 10, 20]; showCfg.sec = o[(o.indexOf(showCfg.sec) + 1) % o.length]; lsSet("fo_show_sec", String(showCfg.sec)); castSend({ cmd: "cfg", sec: showCfg.sec }); renderCastBar(); };
+  $("c-shuf").onclick = () => { showCfg.shuffle = !showCfg.shuffle; lsSet("fo_show_shuf", showCfg.shuffle ? "1" : "0"); castSend({ cmd: "cfg", shuffle: showCfg.shuffle }); renderCastBar(); };
+  $("c-fit").onclick = () => { showCfg.fit = showCfg.fit === "cover" ? "contain" : "cover"; lsSet("fo_show_fit", showCfg.fit); castSend({ cmd: "cfg", fit: showCfg.fit }); renderCastBar(); };
+  $("c-stop").onclick = () => { try { C.ctx.endCurrentSession(true); } catch (e) {} C.active = false; renderCastBar(); };
+}
+
 (function swipe() {
   let x0 = null, y0 = null;
   const v = $("viewer");
@@ -1113,6 +1198,8 @@ async function start() {
   // client-id via link: foto_opruimen.html#client=....apps.googleusercontent.com
   const m = location.hash.match(/client=([^&]+)/);
   if (m) { lsSet("fo_client_id", decodeURIComponent(m[1])); history.replaceState(null, "", location.pathname); }
+  const mc = location.hash.match(/cast=([^&]+)/);
+  if (mc) { lsSet("fo_cast_app_id", decodeURIComponent(mc[1])); history.replaceState(null, "", location.pathname); }
   if (!lsGet("fo_client_id") && DEFAULT_CLIENT_ID) lsSet("fo_client_id", DEFAULT_CLIENT_ID);
   if (!lsGet("fo_client_id")) return showView("setup");
   try {

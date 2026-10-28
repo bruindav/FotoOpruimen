@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Foto App – tv</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: system-ui, sans-serif; color: #fff; cursor: none; }
+  .layer { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity 1.6s ease-in-out; background: #000; }
+  body.cover .layer { object-fit: cover; }
+  #idle { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5vh; color: #9aa3b5; font-size: 3vw; transition: opacity .6s; }
+  #idle small { font-size: 1.7vw; color: #6c768a; }
+  #hud { position: absolute; left: 2.5vw; bottom: 3vh; padding: .35em 1em; border-radius: 99px; background: rgba(0,0,0,.6); font-size: 1.7vw; opacity: 0; transition: opacity .4s; }
+  #hud.on { opacity: 1; }
+</style>
+</head>
+<body>
+<img class="layer" id="la" alt=""><img class="layer" id="lb" alt="">
+<div id="idle"><div>📷 Foto App</div><small>Kies op je telefoon een map of album en tik op "📺 Naar tv"</small></div>
+<div id="hud"></div>
+
+<script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+<script>
+"use strict";
+// Ontvanger voor de Foto App: toont foto's schermvullend op de tv (Chromecast) en laat ze vloeiend overlopen.
+// De telefoon stuurt de lijst met foto's en opdrachten (volgende, pauze, snelheid...) via een eigen Cast-kanaal.
+const NS = "urn:x-cast:nl.fotoapp.slides";
+const $ = (id) => document.getElementById(id);
+const R = {
+  items: [], order: [], idx: 0, sec: 6, fit: "contain", shuffle: false, playing: true, token: null,
+  timer: null, front: "la", errors: 0, seq: 0,
+};
+let context = null;
+
+function size(u) { return u + "=s1920"; }
+function hud(text, ms) {
+  const h = $("hud"); h.textContent = text; h.classList.add("on");
+  clearTimeout(hud.t); hud.t = setTimeout(() => h.classList.remove("on"), ms || 2500);
+}
+function status() {
+  const cur = R.order[R.idx];
+  const msg = { type: "status", index: cur ? cur.k : 0, pos: R.idx, total: R.order.length, playing: R.playing, sec: R.sec, fit: R.fit, shuffle: R.shuffle };
+  try { if (context) context.sendCustomMessage(NS, undefined, msg); } catch (e) {}
+  return msg;
+}
+function rebuildOrder(keepKey) {
+  const base = R.items.map((it, k) => Object.assign({ k }, it));
+  if (R.shuffle) {
+    for (let i = base.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [base[i], base[j]] = [base[j], base[i]]; }
+    if (keepKey !== undefined) { const p = base.findIndex((x) => x.k === keepKey); if (p > 0) [base[0], base[p]] = [base[p], base[0]]; R.idx = 0; }
+  } else if (keepKey !== undefined) R.idx = Math.max(0, keepKey);
+  R.order = base;
+}
+function loadInto(img, it) {
+  return new Promise((resolve) => {
+    let triedBlob = false;
+    img.onload = () => resolve(true);
+    img.onerror = async () => {
+      if (!triedBlob && R.token) {            // vervangende weg: het bestand zelf met de inlog van je telefoon ophalen
+        triedBlob = true;
+        try {
+          const r = await fetch(`https://www.googleapis.com/drive/v3/files/${it.i}?alt=media`, { headers: { Authorization: "Bearer " + R.token } });
+          if (r.ok) { img.src = URL.createObjectURL(await r.blob()); return; }
+        } catch (e) {}
+      }
+      resolve(false);
+    };
+    img.src = size(it.u);
+    setTimeout(() => resolve(false), 15000);
+  });
+}
+async function show(i) {
+  if (!R.order.length) return;
+  R.idx = ((i % R.order.length) + R.order.length) % R.order.length;
+  const mySeq = ++R.seq, it = R.order[R.idx];
+  const next = R.front === "la" ? "lb" : "la", back = $(next), front = $(R.front);
+  const ok = await loadInto(back, it);
+  if (mySeq !== R.seq) return;                                     // intussen is er een nieuwere opdracht
+  if (!ok) { if (++R.errors < 8) return show(R.idx + 1); R.errors = 0; return; }
+  R.errors = 0;
+  $("idle").style.opacity = 0;
+  back.style.opacity = 1; front.style.opacity = 0; R.front = next;
+  status();
+  const nx = R.order[(R.idx + 1) % R.order.length]; if (nx) new Image().src = size(nx.u);       // volgende alvast ophalen
+  schedule();
+}
+function schedule() {
+  clearTimeout(R.timer);
+  if (R.playing && R.order.length > 1) R.timer = setTimeout(() => show(R.idx + 1), R.sec * 1000);
+}
+function handle(m) {
+  if (!m || typeof m !== "object") return;
+  switch (m.cmd) {
+    case "list":
+      if (m.reset) { R.items = []; }
+      R.items = R.items.concat(m.items || []);
+      break;
+    case "start":
+      R.sec = m.sec || R.sec; R.fit = m.fit || R.fit; R.shuffle = !!m.shuffle; R.playing = m.play !== false;
+      if (m.token) R.token = m.token;
+      document.body.classList.toggle("cover", R.fit === "cover");
+      rebuildOrder(m.index || 0);
+      show(R.idx);
+      break;
+    case "token": R.token = m.token; break;
+    case "next": show(R.idx + 1); break;
+    case "prev": show(R.idx - 1); break;
+    case "pause": R.playing = false; clearTimeout(R.timer); hud(`⏸  ${R.idx + 1} / ${R.order.length}`); status(); break;
+    case "play": R.playing = true; hud("▶"); schedule(); status(); break;
+    case "cfg": {
+      if (m.sec) R.sec = m.sec;
+      if (m.fit) { R.fit = m.fit; document.body.classList.toggle("cover", R.fit === "cover"); }
+      if (typeof m.shuffle === "boolean" && m.shuffle !== R.shuffle) { const cur = R.order[R.idx]; R.shuffle = m.shuffle; rebuildOrder(cur ? cur.k : 0); if (!R.shuffle) R.idx = cur ? cur.k : 0; }
+      schedule(); status(); break;
+    }
+    case "ping": status(); break;
+  }
+}
+window.__fotoReceiver = { handle, state: R };        // voor tests
+
+// afstandsbediening van de Chromecast (pijltjes / OK) werkt ook
+document.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowRight") handle({ cmd: "next" });
+  else if (e.key === "ArrowLeft") handle({ cmd: "prev" });
+  else if (e.key === "Enter" || e.key === " ") handle({ cmd: R.playing ? "pause" : "play" });
+});
+
+try {
+  context = cast.framework.CastReceiverContext.getInstance();
+  context.addCustomMessageListener(NS, (ev) => handle(ev.data));
+  context.addEventListener(cast.framework.system.EventType.SENDER_CONNECTED, () => status());
+  context.start({ disableIdleTimeout: true, customNamespaces: { [NS]: cast.framework.system.MessageType.JSON } });
+} catch (e) { /* buiten een Chromecast (bijv. in een gewone browser): alleen testbaar via window.__fotoReceiver */ }
+</script>
+</body>
+</html>
