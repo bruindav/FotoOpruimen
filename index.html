@@ -399,6 +399,7 @@ async function findPreviewRoot() {
   S.previewRoot = res[0].id; return S.previewRoot;
 }
 
+const HIDDEN_FOLDER = /(^|\/ )(__pycache__|drive[ _]sync|\.git|node_modules|\.thumbcache|_te_verwijderen)( \/|$)/i;   // technische mappen tonen we niet
 async function renderCleanHome(force) {
   S.view = "home"; S.current = null; S.items = [];
   setHeader("Foto Opruimen", false);
@@ -408,6 +409,7 @@ async function renderCleanHome(force) {
   try {
     const root = await findPreviewRoot();
     if (!cached) S.folders = await listAll(`'${root}' in parents and trashed=false and mimeType='${FOLDER}'`, "id,name,properties", { orderBy: "name" });
+    if (!cached) S.folders = S.folders.filter((f) => !HIDDEN_FOLDER.test(f.name));
     if (!cached) S.folderNames = Object.fromEntries(S.folders.map((f) => [f.id, f.name]));
     if (!cached) {
       // tijdstip van de laatste sync op de laptop; alleen als dat verandert hoeven de aantallen opnieuw geteld te worden
@@ -440,7 +442,7 @@ async function renderCleanHome(force) {
     const q = $("folder-search").value.toLowerCase();
     const hide = $("hide-empty").checked;
     const list = $("folder-list"); list.innerHTML = "";
-    S.folders.filter((f) => f.name.toLowerCase().includes(q)).forEach((f) => {
+    S.folders.filter((f) => f.name.toLowerCase().includes(q) && !HIDDEN_FOLDER.test(f.name)).forEach((f) => {
       const n = S.counts ? (S.counts[f.id] || 0) : null;     // null = nog onbekend
       const isEmpty = n === 0;
       if (hide && isEmpty) return;
