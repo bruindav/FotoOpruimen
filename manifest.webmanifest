@@ -1,6 +1,6 @@
 {
- "name": "Foto Opruimen",
- "short_name": "Foto Opruimen",
+ "name": "Foto App",
+ "short_name": "Foto App",
  "start_url": "./",
  "scope": "./",
  "display": "standalone",

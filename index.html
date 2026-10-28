@@ -10,8 +10,8 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Foto Opruimen">
-<title>Foto Opruimen</title>
+<meta name="apple-mobile-web-app-title" content="Foto App">
+<title>Foto App</title>
 <style>
   :root {
     --bg: #14151a; --panel: #1c1e25; --panel2: #252831; --border: #333745;
@@ -152,7 +152,7 @@
 <!-- ===== Instellen / inloggen ===== -->
 <main id="view-setup" class="hidden">
   <div class="card">
-    <img src="icon-192.png" alt="" width="72" height="72" style="border-radius:16px;display:block;margin:0 auto 10px"><h1 style="margin:0 0 8px;font-size:22px">Foto Opruimen</h1>
+    <img src="icon-192.png" alt="" width="72" height="72" style="border-radius:16px;display:block;margin:0 auto 10px"><h1 style="margin:0 0 8px;font-size:22px">Foto App</h1>
     <p class="muted">Eenmalig instellen: plak hieronder het <b>Client-ID</b> van je Google "Webtoepassing"
       (zie de instructies die erbij zaten). Dit blijft alleen op dit apparaat bewaard.</p>
     <label class="lbl" for="client-id">Client-ID</label>
@@ -163,7 +163,7 @@
 
 <main id="view-login" class="hidden">
   <div class="card" style="text-align:center">
-    <img src="icon-192.png" alt="" width="72" height="72" style="border-radius:16px;display:block;margin:0 auto 10px"><h1 style="margin:0 0 8px;font-size:22px">Foto Opruimen</h1>
+    <img src="icon-192.png" alt="" width="72" height="72" style="border-radius:16px;display:block;margin:0 auto 10px"><h1 style="margin:0 0 8px;font-size:22px">Foto App</h1>
     <p class="muted">Log in met het Google-account waar je foto's in Drive staan.</p>
     <button class="btn primary" id="btn-login" style="width:100%">Inloggen met Google</button>
     <p class="muted" id="login-msg"></p>
@@ -176,7 +176,7 @@
   <header class="top">
     <div class="top-row">
       <button class="btn small hidden" id="btn-back">←</button>
-      <img src="favicon-32.png" alt="" width="28" height="28" style="border-radius:7px"><h1 id="title">Foto Opruimen</h1>
+      <img src="favicon-32.png" alt="" width="28" height="28" style="border-radius:7px"><h1 id="title">Foto App</h1>
       <button class="btn small" id="btn-select">Selecteren</button>
       <button class="btn small" id="btn-logout">Uit</button>
     </div>
@@ -416,7 +416,7 @@ async function loadYears() {            // alleen jaren waarvoor foto's bestaan 
 const HIDDEN_FOLDER = /(^|\/ )(__pycache__|drive[ _]sync|\.git|node_modules|\.thumbcache|_te_verwijderen)( \/|$)/i;   // technische mappen tonen we niet
 async function renderCleanHome(force) {
   S.view = "home"; S.current = null; S.items = [];
-  setHeader("Foto Opruimen", false);
+  setHeader("Foto App", false);
   const c = $("content");
   const cached = !force && S.folders && S.counts;       // mappen en aantallen blijven bewaard tot de app herstart of je op ↻ drukt
   if (!cached) c.innerHTML = '<div class="loading">Mappen laden…</div>';
