@@ -399,6 +399,20 @@ async function findPreviewRoot() {
   S.previewRoot = res[0].id; return S.previewRoot;
 }
 
+async function loadYears() {            // alleen jaren waarvoor foto's bestaan (bewaard tot de volgende sync)
+  try { const st = JSON.parse(lsGet("fo_years") || "null"); if (st && st.root === S.previewRoot && st.sync === (S.previewSync || "")) { S.years = st.years; return; } } catch (e) {}
+  const now = new Date().getFullYear(), cand = [];
+  for (let y = now; y >= 1950; y--) cand.push(y);
+  const has = {};
+  for (let i = 0; i < cand.length; i += 10) {
+    await Promise.all(cand.slice(i, i + 10).map(async (y) => {
+      const r = await gapi("/files", { params: { q: `properties has { key='fa' and value='1' } and properties has { key='yr' and value='${y}' } and trashed=false`, fields: "files(id)", pageSize: 1 } });
+      has[y] = (r.files || []).length > 0;
+    }));
+  }
+  S.years = cand.filter((y) => has[y]);
+  lsSet("fo_years", JSON.stringify({ root: S.previewRoot, sync: S.previewSync || "", years: S.years }));
+}
 const HIDDEN_FOLDER = /(^|\/ )(__pycache__|drive[ _]sync|\.git|node_modules|\.thumbcache|_te_verwijderen)( \/|$)/i;   // technische mappen tonen we niet
 async function renderCleanHome(force) {
   S.view = "home"; S.current = null; S.items = [];
@@ -422,9 +436,7 @@ async function renderCleanHome(force) {
     }
   } catch (e) { c.innerHTML = `<div class="card"><h2>Niets gevonden</h2><p class="muted">${esc(e.message)}</p></div>`; return; }
 
-  const thisYear = new Date().getFullYear();
-  let years = "";
-  for (let y = thisYear; y >= 1990; y--) years += `<option value="${y}">${y}</option>`;
+  const years = "";
   c.innerHTML = `
     <div class="summary"><span class="pill">Markeringen "weg": <b id="weg-count">${S.weg ?? "…"}</b></span>
       <span class="pill">Mappen: <b>${S.folders.length}</b></span>
@@ -436,6 +448,15 @@ async function renderCleanHome(force) {
       <label class="opt"><input type="checkbox" id="hide-empty"> Verberg lege mappen <span id="count-status" class="muted"></span></label>
       <div class="list" id="folder-list"></div></div>`;
   $("year-sel").onchange = (e) => { if (e.target.value) openYear(e.target.value); };
+  const fillYears = () => {
+    const sel = $("year-sel"); if (!sel || !S.years) return;
+    sel.innerHTML = '<option value="">Kies een jaar…</option>' + S.years.map((y) => `<option value="${y}">${y}</option>`).join("");
+  };
+  if (S.years) fillYears(); else loadYears().then(fillYears).catch(() => {
+    const sel = $("year-sel"); if (!sel) return; let o = "";
+    for (let y = new Date().getFullYear(); y >= 1990; y--) o += `<option value="${y}">${y}</option>`;
+    sel.innerHTML = '<option value="">Kies een jaar…</option>' + o;
+  });
   $("hide-empty").checked = lsGet("fo_hide_empty") !== "0";   // standaard lege (bovenliggende) mappen verbergen
   $("hide-empty").onchange = () => { lsSet("fo_hide_empty", $("hide-empty").checked ? "1" : "0"); draw(); };
   const draw = () => {
@@ -455,7 +476,7 @@ async function renderCleanHome(force) {
     if (!list.children.length) list.innerHTML = '<div class="muted">Geen mappen gevonden.</div>';
   };
   $("folder-search").oninput = draw; draw();
-  $("recount").onclick = () => { if (S.countJob) { toast("Er wordt al geteld"); return; } S.counts = null; renderCleanHome(true); };
+  $("recount").onclick = () => { if (S.countJob) { toast("Er wordt al geteld"); return; } S.counts = null; S.years = null; lsSet("fo_years", null); renderCleanHome(true); };
   if (cached || S.counts) { listAll("properties has { key='mark' and value='weg' } and trashed=false", "id").then((r) => { S.weg = r.length; const el = $("weg-count"); if (el) el.textContent = r.length; }).catch(() => {}); return; }
   S.counts = null; draw();
   // aantal foto's per map ophalen (op de achtergrond), zodat lege mappen een andere kleur krijgen
