@@ -137,6 +137,8 @@
   #viewer .vnav.l { left: 0; text-align: left; padding-left: 10px; } #viewer .vnav.r { right: 0; text-align: right; padding-right: 10px; }
   #viewer .showonly { display: none; gap: 8px; } #viewer.show .showonly { display: inline-flex; }
   #viewer .favon { color: #ff6b81; }
+  #viewer.show .vimg img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: contain; transition: opacity 1.4s ease-in-out; }
+  #viewer.show.fitcover .vimg img { object-fit: cover; }
   #viewer .vimg { overflow: hidden; }
   #viewer .vimg img { touch-action: none; transform-origin: 0 0; will-change: transform; }
   #viewer.zoomed .vnav { display: none; }
@@ -821,7 +823,7 @@ function renderViewer() {
   const v = $("viewer");
   v.innerHTML = `
     <div class="vtop"><button class="btn small" id="v-close">✕</button><button class="btn small" id="v-show" title="Diavoorstelling">▶</button><button class="btn small ${isFav(f) ? "favon" : ""}" id="v-fav" title="Beste foto">${isFav(f) ? "♥" : "♡"}</button>
-      <span class="showonly"><button class="btn small" id="v-speed" title="Snelheid">⏱ ${showCfg.sec}s</button><button class="btn small ${showCfg.shuffle ? "favon" : ""}" id="v-shuf" title="Willekeurige volgorde">🔀</button></span>
+      <span class="showonly"><button class="btn small" id="v-speed" title="Snelheid">⏱ ${showCfg.sec}s</button><button class="btn small ${showCfg.shuffle ? "favon" : ""}" id="v-shuf" title="Willekeurige volgorde">🔀</button><button class="btn small" id="v-fit" title="Beeld vullen of hele foto tonen">${showCfg.fit === "cover" ? "⤡ vullen" : "⤢ passen"}</button></span>
       <div class="vtitle"><div>${esc(cleanName(f.name))}</div><div>${esc(folder)} · ${vIndex + 1}/${vList.length}</div>${dateMismatch(f) ? `<div style="color:#ffd27a">⚠ datum in foto: ${dateMismatch(f).ey}, map: ${dateMismatch(f).yr}</div>` : ""}</div></div>
     <div class="vimg ${m}" id="v-img">
       ${m ? `<span class="vstate ${m}">${m === "weg" ? "🗑 weg" : "✓ behouden"}</span>` : ""}
@@ -838,6 +840,7 @@ function renderViewer() {
   $("v-show").onclick = () => startShow();
   $("v-fav").onclick = async () => { await setProps([f], { fav: isFav(f) ? null : "1" }); renderViewer(); };
   $("v-speed").onclick = () => { const o = [3, 6, 10, 20]; showCfg.sec = o[(o.indexOf(showCfg.sec) + 1) % o.length]; lsSet("fo_show_sec", String(showCfg.sec)); $("v-speed").textContent = `⏱ ${showCfg.sec}s`; if (showTimer) restartShowTimer(); };
+  $("v-fit").onclick = () => { showCfg.fit = showCfg.fit === "cover" ? "contain" : "cover"; lsSet("fo_show_fit", showCfg.fit); $("v-fit").textContent = showCfg.fit === "cover" ? "⤡ vullen" : "⤢ passen"; $("viewer").classList.toggle("fitcover", showCfg.fit === "cover"); };
   $("v-shuf").onclick = () => { showCfg.shuffle = !showCfg.shuffle; lsSet("fo_show_shuf", showCfg.shuffle ? "1" : "0"); $("v-shuf").classList.toggle("favon", showCfg.shuffle); applyShuffle(); };
   initZoom();
   $("viewer").classList.toggle("show", !!showTimer || showPaused);
@@ -852,7 +855,7 @@ function renderViewer() {
 }
 // ---- diavoorstelling (ook handig om de telefoon naar een tv/Chromecast te casten)
 let showTimer = null, showPaused = false, wakeLock = null, vOrig = null;
-const showCfg = { sec: [3, 6, 10, 20].includes(Number(lsGet("fo_show_sec"))) ? Number(lsGet("fo_show_sec")) : 6, shuffle: lsGet("fo_show_shuf") === "1" };
+const showCfg = { fit: lsGet("fo_show_fit") === "cover" ? "cover" : "contain", sec: [3, 6, 10, 20].includes(Number(lsGet("fo_show_sec"))) ? Number(lsGet("fo_show_sec")) : 6, shuffle: lsGet("fo_show_shuf") === "1" };
 function shuffled(arr, firstId) {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
@@ -866,14 +869,29 @@ function applyShuffle() {                 // volgorde aanpassen terwijl de voors
   else if (vOrig) { vList = vOrig; vOrig = null; vIndex = Math.max(0, vList.findIndex((x) => cur && x.id === cur.id)); }
   renderViewer();
 }
+async function slideTo(n) {              // vloeiend overlopen: nieuwe foto laden, daarna zacht inblenden over de vorige
+  const box = $("v-img"), old = $("v-photo");
+  if (!box || !old || !vList[n]) { vIndex = n; renderViewer(); return; }
+  const f = vList[n], nu = document.createElement("img");
+  nu.alt = ""; nu.style.opacity = "0";
+  await new Promise((res) => { nu.onload = res; nu.onerror = res; setImg(nu, f, 1920); setTimeout(res, 8000); });
+  if (!showTimer || $("v-photo") !== old) return;              // voorstelling intussen gepauzeerd of gestopt
+  vIndex = n;
+  box.insertBefore(nu, box.querySelector(".vnav"));
+  void nu.offsetWidth; nu.style.opacity = "1";
+  old.id = ""; nu.id = "v-photo";
+  setTimeout(() => old.remove(), 1600);
+  const nx = vList[(n + 1) % vList.length]; if (nx && nx.thumbnailLink) new Image().src = thumbUrl(nx, 1920);   // volgende alvast ophalen
+}
 function restartShowTimer() {
   clearInterval(showTimer);
-  showTimer = setInterval(() => { vIndex = (vIndex + 1) % vList.length; renderViewer(); }, showCfg.sec * 1000);
+  showTimer = setInterval(() => slideTo((vIndex + 1) % vList.length), showCfg.sec * 1000);
 }
 async function startShow(fromStart) {
   showPaused = false; clearInterval(showTimer);
-  const v = $("viewer"); v.classList.add("show"); v.classList.remove("pauzed", "zoomed");
+  const v = $("viewer"); v.classList.add("show"); v.classList.remove("pauzed", "zoomed"); v.classList.toggle("fitcover", showCfg.fit === "cover");
   try { if (v.requestFullscreen) await v.requestFullscreen(); } catch (e) {}
+  try { if (screen.orientation && screen.orientation.lock) await screen.orientation.lock("landscape"); } catch (e) {}   // liggend: vult een tv-scherm
   try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
   restartShowTimer();
   if (showCfg.shuffle && !vOrig) { vOrig = vList.slice(); vList = shuffled(vOrig, vList[vIndex] && vList[vIndex].id); vIndex = 0; renderViewer(); }
@@ -883,12 +901,13 @@ function stopShow() {
   clearInterval(showTimer); showTimer = null; showPaused = false;
   if (vOrig) { vList = vOrig; vOrig = null; }
   $("viewer").classList.remove("show", "pauzed");
+  try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) {}
   try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
   try { if (wakeLock) { wakeLock.release(); wakeLock = null; } } catch (e) {}
 }
 $("viewer").addEventListener("click", (e) => {      // tik tijdens de voorstelling = pauze / hervat
   const v = $("viewer"); if (!v.classList.contains("show") || e.target.closest(".vtop")) return;
-  if (showTimer) { clearInterval(showTimer); showTimer = null; showPaused = true; v.classList.add("pauzed"); }
+  if (showTimer) { clearInterval(showTimer); showTimer = null; showPaused = true; v.classList.add("pauzed"); renderViewer(); }
   else { showPaused = false; v.classList.remove("pauzed"); restartShowTimer(); }
 });
 document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && showTimer) stopShow(); });
