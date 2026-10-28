@@ -100,6 +100,7 @@
   }
   .tile.weg .badge { background: var(--danger); }
   .tile.houd .badge { background: var(--ok); }
+  .tile .favflag { position: absolute; right: 6px; bottom: 4px; font-size: 16px; color: #ff6b81; text-shadow: 0 0 4px #000; }
   .tile .dmflag { position: absolute; left: 4px; bottom: 4px; font-size: 11px; padding: 1px 6px; border-radius: 99px; background: rgba(0,0,0,.72); color: #ffd27a; }
   .tile .check {
     position: absolute; right: 6px; top: 6px; width: 26px; height: 26px; border-radius: 50%;
@@ -130,6 +131,11 @@
   #viewer .vstate.weg { background: var(--danger); } #viewer .vstate.houd { background: var(--ok); }
   #viewer .vnav { position: absolute; top: 0; bottom: 0; width: 22%; background: none; border: 0; color: #fff; font-size: 34px; opacity: .55; }
   #viewer .vnav.l { left: 0; text-align: left; padding-left: 10px; } #viewer .vnav.r { right: 0; text-align: right; padding-right: 10px; }
+  #viewer .showonly { display: none; gap: 8px; } #viewer.show .showonly { display: inline-flex; }
+  #viewer .favon { color: #ff6b81; }
+  #viewer .vimg { overflow: hidden; }
+  #viewer .vimg img { touch-action: none; transform-origin: 0 0; will-change: transform; }
+  #viewer.zoomed .vnav { display: none; }
   #viewer.show .vtop, #viewer.show .vbar, #viewer.show .vnav { display: none; }
   #viewer.show.pauzed .vtop { display: flex; }
   #viewer .vimg img { transition: opacity .4s; }
@@ -181,7 +187,8 @@
       <button class="btn small" id="btn-logout">Uit</button>
     </div>
     <div class="tabs">
-      <button class="tab active" id="tab-clean">🧹 Opschonen</button>
+      <button class="tab active" id="tab-look">👁 Kijken</button>
+      <button class="tab" id="tab-clean">🧹 Opschonen</button>
       <button class="tab" id="tab-albums">🖼 Albums</button>
     </div>
   </header>
@@ -356,6 +363,7 @@ const S = {
   weg: null,
 };
 
+function isFav(f) { return !!(f.properties && f.properties.fav); }
 function mark(f) { return (f.properties && f.properties.mark) || ""; }
 
 // ------------------------------------------------------------------ terug-knop (geschiedenis)
@@ -388,7 +396,7 @@ window.addEventListener("popstate", () => {
   else if (kind === "sheet") hideSheet();
   else if (kind === "select") { exitSelect(); if (S.items.length) renderItems(); }
   else if (kind === "yearfolder") { exitSelect(); S.yearFolder = null; renderItems(); }
-  else if (kind === "list") { exitSelect(); S.tab === "clean" ? renderCleanHome() : renderAlbumsHome(); }
+  else if (kind === "list") { exitSelect(); S.tab === "albums" ? renderAlbumsHome() : renderCleanHome(); }
 });
 
 // ------------------------------------------------------------------ opschonen: home
@@ -438,7 +446,7 @@ async function renderCleanHome(force) {
 
   const years = "";
   c.innerHTML = `
-    <div class="summary"><span class="pill">Markeringen "weg": <b id="weg-count">${S.weg ?? "…"}</b></span>
+    <div class="summary">${S.look ? "" : `<span class="pill">Markeringen "weg": <b id="weg-count">${S.weg ?? "…"}</b></span>`}
       <span class="pill">Mappen: <b>${S.folders.length}</b></span>
       <button class="chip" id="recount">↻ Opnieuw tellen</button></div>
     <div class="card"><h2>Per jaar</h2>
@@ -536,7 +544,7 @@ function visibleItems() {
   return S.items.filter((f) => {
     if (S.view === "year" && S.yearFolder && S.yearFolder !== "*" && ((f.parents || [])[0] || "?") !== S.yearFolder) return false;
     const m = mark(f), mv = f.properties && f.properties.mv;
-    return S.filter === "all" || (S.filter === "open" && !m && !mv) || S.filter === m || (S.filter === "move" && mv);
+    return S.filter === "all" || (S.filter === "fav" && isFav(f)) || (S.filter === "open" && !m && !mv) || S.filter === m || (S.filter === "move" && mv);
   });
 }
 
@@ -570,14 +578,16 @@ function renderItems() {
   if (S.view === "year" && !S.yearFolder) { renderYearFolders(); return; }
   const c = $("content"); const n = counts();
   const isAlbum = S.view === "album";
-  const chips = isAlbum ? `<div class="filters"><button class="chip" id="album-show">▶ Diavoorstelling (${S.items.length})</button></div>` : `<div class="filters">
-      ${[["all", "Alles " + S.items.length], ["open", "Open " + n.open], ["weg", "Weg " + n.weg], ["houd", "Behouden " + n.houd], ["move", "Verplaatsen " + n.move]]
-        .map(([k, l]) => `<button class="chip ${S.filter === k ? "active" : ""}" data-f="${k}">${l}</button>`).join("")}</div>`;
+  const favN = S.items.filter(isFav).length;
+  const showChip = `<button class="chip" id="album-show">▶ Diavoorstelling</button>`;
+  const chips = isAlbum ? `<div class="filters">${[["all", "Alles " + S.items.length], ["fav", "♥ Beste " + favN]].map(([k, l]) => `<button class="chip ${S.filter === k ? "active" : ""}" data-f="${k}">${l}</button>`).join("")}${showChip}</div>` : S.look ? `<div class="filters">${[["all", "Alles " + S.items.length], ["fav", "♥ Beste " + favN]].map(([k, l]) => `<button class="chip ${S.filter === k ? "active" : ""}" data-f="${k}">${l}</button>`).join("")}${showChip}</div>` : `<div class="filters">
+      ${[["all", "Alles " + S.items.length], ["fav", "♥ " + favN], ["open", "Open " + n.open], ["weg", "Weg " + n.weg], ["houd", "Behouden " + n.houd], ["move", "Verplaatsen " + n.move]]
+        .map(([k, l]) => `<button class="chip ${S.filter === k ? "active" : ""}" data-f="${k}">${l}</button>`).join("")}${showChip}</div>`;
   const yBack = S.view === "year" ? `<div style="margin:0 0 8px"><button class="chip" id="yf-back">‹ Alle mappen van ${esc(S.current.year)}</button> <b>${S.yearFolder === "*" ? "Alle foto's" : esc((S.folderNames && S.folderNames[S.yearFolder]) || "")}</b></div>` : "";
   c.innerHTML = yBack + mergeBarHtml() + chips + '<div class="grid' + (S.selecting ? " selecting" : "") + '" id="grid"></div><div class="spacer"></div>';
   c.querySelectorAll(".chip").forEach((b) => b.onclick = () => { S.filter = b.dataset.f; renderItems(); });
   wireMergeBar();
-  if ($("album-show")) $("album-show").onclick = () => { if (S.items.length) { openViewer(0); startShow(); } };
+  if ($("album-show")) $("album-show").onclick = () => { if (visibleItems().length) { openViewer(0); startShow(true); } else toast("Geen foto's om te tonen"); };
   if ($("yf-back")) $("yf-back").onclick = () => goBack();
   const grid = $("grid"); const vis = visibleItems();
   if (!vis.length) grid.innerHTML = '<div class="muted" style="padding:20px 0">Niets te tonen.</div>';
@@ -597,15 +607,15 @@ function makeTile(f, idx) {
   t.style.flexGrow = String(Math.round(ratio * 100));
   t.style.flexBasis = Math.round(ratio * 130) + "px";
   t.style.maxWidth = "100%";
-  const m = mark(f);
-  const mv = f.properties && f.properties.mv;
+  const m = S.look ? "" : mark(f);
+  const mv = S.look ? "" : (f.properties && f.properties.mv);
   if (m) t.classList.add(m);
   if (mv) t.classList.add("mv");
   if (S.selected.has(f.id)) t.classList.add("selected");
   const dm = dateMismatch(f);
   const img = document.createElement("img"); img.loading = "lazy"; img.alt = "";
   setImg(img, f, 400); t.appendChild(img);
-  t.insertAdjacentHTML("beforeend", (m ? `<span class="badge">${m === "weg" ? "🗑 weg" : "✓"}</span>` : mv ? `<span class="badge">→ ${esc(S.folderNames[mv] || "map")}</span>` : "") + (dm ? `<span class="dmflag" title="Datum in de foto wijkt af van de map">⚠ camera ${dm.ey}</span>` : "") + '<span class="check">✓</span>');
+  t.insertAdjacentHTML("beforeend", (m ? `<span class="badge">${m === "weg" ? "🗑 weg" : "✓"}</span>` : mv ? `<span class="badge">→ ${esc(S.folderNames[mv] || "map")}</span>` : "") + (isFav(f) ? '<span class="favflag">♥</span>' : "") + (dm ? `<span class="dmflag" title="Datum in de foto wijkt af van de map">⚠ camera ${dm.ey}</span>` : "") + '<span class="check">✓</span>');
   t.onclick = () => {
     if (S.selecting) toggleSelect(f.id, t);
     else openViewer(idx);
@@ -616,7 +626,7 @@ function makeTile(f, idx) {
 function setHeader(title, back) {
   $("title").textContent = title;
   $("btn-back").classList.toggle("hidden", !back);
-  $("btn-select").classList.toggle("hidden", !(S.view === "folder" || S.view === "year" || S.view === "album"));
+  $("btn-select").classList.toggle("hidden", S.look || !(S.view === "folder" || S.view === "year" || S.view === "album"));
 }
 
 // ------------------------------------------------------------------ markeren
@@ -798,19 +808,20 @@ function hideViewer(quiet) {
 }
 function renderViewer() {
   const f = vList[vIndex]; if (!f) return closeViewer();
-  const m = mark(f);
+  const m = S.look ? "" : mark(f);
   const folder = (f.parents || []).map((p) => S.folderNames[p]).filter(Boolean)[0] || "";
   const album = S.view === "album";
   const v = $("viewer");
   v.innerHTML = `
-    <div class="vtop"><button class="btn small" id="v-close">✕</button><button class="btn small" id="v-show" title="Diavoorstelling">▶</button>
+    <div class="vtop"><button class="btn small" id="v-close">✕</button><button class="btn small" id="v-show" title="Diavoorstelling">▶</button><button class="btn small ${isFav(f) ? "favon" : ""}" id="v-fav" title="Beste foto">${isFav(f) ? "♥" : "♡"}</button>
+      <span class="showonly"><button class="btn small" id="v-speed" title="Snelheid">⏱ ${showCfg.sec}s</button><button class="btn small ${showCfg.shuffle ? "favon" : ""}" id="v-shuf" title="Willekeurige volgorde">🔀</button></span>
       <div class="vtitle"><div>${esc(cleanName(f.name))}</div><div>${esc(folder)} · ${vIndex + 1}/${vList.length}</div>${dateMismatch(f) ? `<div style="color:#ffd27a">⚠ datum in foto: ${dateMismatch(f).ey}, map: ${dateMismatch(f).yr}</div>` : ""}</div></div>
     <div class="vimg ${m}" id="v-img">
       ${m ? `<span class="vstate ${m}">${m === "weg" ? "🗑 weg" : "✓ behouden"}</span>` : ""}
       <img alt="" id="v-photo">
       <button class="vnav l" id="v-prev">‹</button><button class="vnav r" id="v-next">›</button>
     </div>
-    ${album ? "" : `<div class="vbar">
+    ${(album || S.look) ? "" : `<div class="vbar">
       <button class="btn danger" id="v-weg">🗑 Weg</button>
       <button class="btn ok" id="v-houd">✓ Houden</button>
       <button class="btn" id="v-mv">📁</button>
@@ -818,9 +829,13 @@ function renderViewer() {
   setImg($("v-photo"), f, (showTimer || showPaused) ? 1920 : 1200);
   $("v-close").onclick = closeViewer;
   $("v-show").onclick = () => startShow();
+  $("v-fav").onclick = async () => { await setProps([f], { fav: isFav(f) ? null : "1" }); renderViewer(); };
+  $("v-speed").onclick = () => { const o = [3, 6, 10, 20]; showCfg.sec = o[(o.indexOf(showCfg.sec) + 1) % o.length]; lsSet("fo_show_sec", String(showCfg.sec)); $("v-speed").textContent = `⏱ ${showCfg.sec}s`; if (showTimer) restartShowTimer(); };
+  $("v-shuf").onclick = () => { showCfg.shuffle = !showCfg.shuffle; lsSet("fo_show_shuf", showCfg.shuffle ? "1" : "0"); $("v-shuf").classList.toggle("favon", showCfg.shuffle); applyShuffle(); };
+  initZoom();
   $("viewer").classList.toggle("show", !!showTimer || showPaused);
   $("v-prev").onclick = () => nav(-1); $("v-next").onclick = () => nav(1);
-  if (!album) {
+  if (!album && !S.look) {
     const act = (val) => async () => { await setMarks([f], val); if (val) nav(1, true); else renderViewer(); };
     $("v-mv").onclick = () => moveFilesDialog([f], () => renderViewer());
     $("v-weg").onclick = act("weg"); $("v-houd").onclick = act("houd"); $("v-clear").onclick = act("");
@@ -829,17 +844,37 @@ function renderViewer() {
   [vList[vIndex + 1], vList[vIndex - 1]].forEach((n) => { if (n && n.thumbnailLink) new Image().src = thumbUrl(n, 1200); });
 }
 // ---- diavoorstelling (ook handig om de telefoon naar een tv/Chromecast te casten)
-let showTimer = null, showPaused = false, wakeLock = null;
-async function startShow() {
+let showTimer = null, showPaused = false, wakeLock = null, vOrig = null;
+const showCfg = { sec: [3, 6, 10, 20].includes(Number(lsGet("fo_show_sec"))) ? Number(lsGet("fo_show_sec")) : 6, shuffle: lsGet("fo_show_shuf") === "1" };
+function shuffled(arr, firstId) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  if (firstId) { const k = a.findIndex((x) => x.id === firstId); if (k > 0) [a[0], a[k]] = [a[k], a[0]]; }
+  return a;
+}
+function applyShuffle() {                 // volgorde aanpassen terwijl de voorstelling loopt
+  if (!(showTimer || showPaused) || !vList.length) return;
+  const cur = vList[vIndex];
+  if (showCfg.shuffle) { if (!vOrig) vOrig = vList.slice(); vList = shuffled(vOrig, cur && cur.id); vIndex = 0; }
+  else if (vOrig) { vList = vOrig; vOrig = null; vIndex = Math.max(0, vList.findIndex((x) => cur && x.id === cur.id)); }
+  renderViewer();
+}
+function restartShowTimer() {
+  clearInterval(showTimer);
+  showTimer = setInterval(() => { vIndex = (vIndex + 1) % vList.length; renderViewer(); }, showCfg.sec * 1000);
+}
+async function startShow(fromStart) {
   showPaused = false; clearInterval(showTimer);
-  const v = $("viewer"); v.classList.add("show"); v.classList.remove("pauzed");
+  const v = $("viewer"); v.classList.add("show"); v.classList.remove("pauzed", "zoomed");
   try { if (v.requestFullscreen) await v.requestFullscreen(); } catch (e) {}
   try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
-  showTimer = setInterval(() => { vIndex = (vIndex + 1) % vList.length; renderViewer(); }, 6000);
-  if (!lsGet("fo_cast_hint")) { lsSet("fo_cast_hint", "1"); toast("Tip: tik op het scherm om te pauzeren. Casten: veeg het snelmenu open en kies 'Scherm casten'."); }
+  restartShowTimer();
+  if (showCfg.shuffle && !vOrig) { vOrig = vList.slice(); vList = shuffled(vOrig, vList[vIndex] && vList[vIndex].id); vIndex = 0; renderViewer(); }
+  if (!lsGet("fo_cast_hint")) { lsSet("fo_cast_hint", "1"); toast("Tip: tik op het scherm om te pauzeren (daar stel je ook snelheid en volgorde in). Casten: veeg het snelmenu open en kies 'Scherm casten'."); }
 }
 function stopShow() {
   clearInterval(showTimer); showTimer = null; showPaused = false;
+  if (vOrig) { vList = vOrig; vOrig = null; }
   $("viewer").classList.remove("show", "pauzed");
   try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
   try { if (wakeLock) { wakeLock.release(); wakeLock = null; } } catch (e) {}
@@ -847,9 +882,70 @@ function stopShow() {
 $("viewer").addEventListener("click", (e) => {      // tik tijdens de voorstelling = pauze / hervat
   const v = $("viewer"); if (!v.classList.contains("show") || e.target.closest(".vtop")) return;
   if (showTimer) { clearInterval(showTimer); showTimer = null; showPaused = true; v.classList.add("pauzed"); }
-  else { startShow(); }
+  else { showPaused = false; v.classList.remove("pauzed"); restartShowTimer(); }
 });
 document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && showTimer) stopShow(); });
+
+// ---- zoomen: knijpen, slepen, dubbeltikken (en scrollwiel op de laptop)
+let Z = { s: 1, x: 0, y: 0, hi: false };
+function initZoom() {
+  const box = $("v-img"), img = $("v-photo"); if (!box || !img) return;
+  Z = { s: 1, x: 0, y: 0, hi: false };
+  $("viewer").classList.remove("zoomed");
+  const pts = new Map(); let pinch0 = null, drag0 = null, lastTap = { t: 0, x: 0, y: 0 }, base = null, moved = false;
+  const measure = () => { const r = img.getBoundingClientRect(); base = { l: r.left - Z.x, t: r.top - Z.y, w: r.width / Z.s, h: r.height / Z.s }; };
+  const clamp = () => {
+    const B = box.getBoundingClientRect(), W = base.w * Z.s, H = base.h * Z.s;
+    const minX = W >= B.width ? B.right - base.l - W : (B.left + B.width / 2) - base.l - W / 2, maxX = W >= B.width ? B.left - base.l : minX;
+    const minY = H >= B.height ? B.bottom - base.t - H : (B.top + B.height / 2) - base.t - H / 2, maxY = H >= B.height ? B.top - base.t : minY;
+    Z.x = Math.min(maxX, Math.max(minX, Z.x)); Z.y = Math.min(maxY, Math.max(minY, Z.y));
+  };
+  const apply = () => {
+    if (Z.s <= 1.01) { Z.s = 1; Z.x = 0; Z.y = 0; } else clamp();
+    img.style.transform = Z.s === 1 ? "" : `translate(${Z.x}px,${Z.y}px) scale(${Z.s})`;
+    $("viewer").classList.toggle("zoomed", Z.s > 1.01);
+    if (Z.s > 1.2 && !Z.hi) { Z.hi = true; const f = vList[vIndex]; if (f) setImg(img, f, 2400); }   // scherpere versie zodra je inzoomt
+  };
+  const zoomAt = (px, py, s2) => {
+    if (!base || Z.s === 1) measure();
+    s2 = Math.min(6, Math.max(1, s2));
+    const ux = (px - base.l - Z.x) / Z.s, uy = (py - base.t - Z.y) / Z.s;
+    Z.x = px - base.l - ux * s2; Z.y = py - base.t - uy * s2; Z.s = s2; apply();
+  };
+  const ok = (e) => e.target === img || e.target === box;
+  box.addEventListener("pointerdown", (e) => {
+    if (!ok(e) || $("viewer").classList.contains("show")) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); moved = false;
+    try { box.setPointerCapture(e.pointerId); } catch (_) {}
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = { d: Math.hypot(a.x - b.x, a.y - b.y), s: Z.s }; drag0 = null; }
+    else if (pts.size === 1) { if (Z.s === 1) measure(); drag0 = { x: e.clientX, y: e.clientY, ox: Z.x, oy: Z.y }; }
+  });
+  box.addEventListener("pointermove", (e) => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2 && pinch0) {
+      const [a, b] = [...pts.values()]; moved = true;
+      zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, pinch0.s * Math.hypot(a.x - b.x, a.y - b.y) / pinch0.d);
+    } else if (pts.size === 1 && drag0 && Z.s > 1) {
+      if (Math.abs(e.clientX - drag0.x) + Math.abs(e.clientY - drag0.y) > 4) moved = true;
+      Z.x = drag0.ox + e.clientX - drag0.x; Z.y = drag0.oy + e.clientY - drag0.y; apply();
+    }
+  });
+  const up = (e) => {
+    if (!pts.has(e.pointerId)) return;
+    const wasOne = pts.size === 1; pts.delete(e.pointerId); pinch0 = null;
+    if (pts.size === 1) { const [r] = [...pts.values()]; drag0 = { x: r.x, y: r.y, ox: Z.x, oy: Z.y }; } else drag0 = null;
+    if (wasOne && !moved && e.type === "pointerup") {            // dubbeltik: in-/uitzoomen
+      const now = Date.now();
+      if (now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) {
+        if (Z.s > 1.01) { Z.s = 1; apply(); } else zoomAt(e.clientX, e.clientY, 2.5);
+        lastTap.t = 0;
+      } else lastTap = { t: now, x: e.clientX, y: e.clientY };
+    }
+  };
+  box.addEventListener("pointerup", up); box.addEventListener("pointercancel", up);
+  box.addEventListener("wheel", (e) => { if ($("viewer").classList.contains("show")) return; e.preventDefault(); zoomAt(e.clientX, e.clientY, Z.s * (e.deltaY < 0 ? 1.2 : 1 / 1.2)); }, { passive: false });
+}
 function nav(d, fromMark) {
   const n = vIndex + d;
   if (n < 0 || n >= vList.length) { if (fromMark) { toast("Einde van de lijst"); closeViewer(); } return; }
@@ -858,9 +954,11 @@ function nav(d, fromMark) {
 (function swipe() {
   let x0 = null, y0 = null;
   const v = $("viewer");
-  v.addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  let multi = false;
+  v.addEventListener("touchstart", (e) => { if (e.touches.length > 1) multi = true; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
   v.addEventListener("touchend", (e) => {
-    if (x0 === null) return;
+    if (e.touches.length === 0) { const was = multi; multi = false; if (was) { x0 = null; return; } }
+    if (x0 === null || v.classList.contains("zoomed")) { x0 = null; return; }
     const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) nav(dx < 0 ? 1 : -1);
   }, { passive: true });
@@ -948,12 +1046,14 @@ async function removeFromAlbum() {
 // ------------------------------------------------------------------ navigatie
 function setTab(t) { unwindThen(() => setTabNow(t)); }
 function setTabNow(t) {
-  S.tab = t;
+  S.tab = t; S.look = t === "look"; lsSet("fo_tab", t);
+  $("tab-look").classList.toggle("active", t === "look");
   $("tab-clean").classList.toggle("active", t === "clean");
   $("tab-albums").classList.toggle("active", t === "albums");
   exitSelect();
-  if (t === "clean") renderCleanHome(); else renderAlbumsHome();
+  if (t === "clean" || t === "look") renderCleanHome(); else renderAlbumsHome();
 }
+$("tab-look").onclick = () => setTab("look");
 $("tab-clean").onclick = () => setTab("clean");
 $("tab-albums").onclick = () => setTab("albums");
 $("btn-back").onclick = () => { if (navTop() === "list" || navTop() === "yearfolder") goBack(); else setTab(S.tab); };
@@ -981,7 +1081,7 @@ $("btn-login").onclick = async () => {
   catch (e) { $("login-msg").textContent = "Inloggen mislukt: " + e.message; }
 };
 
-function enterApp() { showView("app"); initHistory(); setTabNow("clean"); }
+function enterApp() { showView("app"); initHistory(); setTabNow(lsGet("fo_tab") === "clean" || lsGet("fo_tab") === "albums" ? lsGet("fo_tab") : "look"); }
 
 async function start() {
   // client-id via link: foto_opruimen.html#client=....apps.googleusercontent.com
