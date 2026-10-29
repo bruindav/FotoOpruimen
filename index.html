@@ -1037,16 +1037,24 @@ function castTitle(list) {          // tekst voor op de tv bij de eerste foto: m
   } else { title = last((first.parents || []).map((p) => S.folderNames[p]).filter(Boolean)[0]); sub = (first.properties && first.properties.yr) || ""; }
   return { title: title || "", sub: sub || "" };
 }
+function initCastCtx() {
+  if (C.ctx) return true;
+  if (!window.cast || !cast.framework || !window.chrome || !chrome.cast) return false;
+  C.ctx = cast.framework.CastContext.getInstance();
+  C.ctx.setOptions({ receiverApplicationId: castAppId(), autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED });
+  C.ctx.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, onCastSession);
+  return true;
+}
+function preloadCast() { if (castAppId()) loadCastSdk().then((ok) => { if (ok) initCastCtx(); }); }
 async function startCast(list, index) {
   if (!castAppId()) { toast("Casten is nog niet ingesteld"); return; }
   if (!list.length) { toast("Geen foto's om te tonen"); return; }
-  toast("Casten voorbereiden…");
-  const ok = await loadCastSdk();
-  if (!ok) { toast("Casten werkt alleen in Google Chrome (niet in Vivaldi of de tv-browser)"); return; }
-  if (!C.ctx) {
-    C.ctx = cast.framework.CastContext.getInstance();
-    C.ctx.setOptions({ receiverApplicationId: castAppId(), autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED });
-    C.ctx.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, onCastSession);
+  // Belangrijk: requestSession moet DIRECT na jouw tik worden aangeroepen (Chrome vergeet de tik na enkele seconden),
+  // dus de Cast-bibliotheek wordt al bij het openstaan van de pagina geladen.
+  if (!initCastCtx()) {
+    toast("Casten wordt voorbereid… tik over een paar seconden nog eens");
+    preloadCast();
+    return;
   }
   try { if (!C.ctx.getCurrentSession()) await C.ctx.requestSession(); }
   catch (e) { if (e !== "cancel") toast("Verbinden met de tv mislukt: " + (e && e.description ? e.description : e) + " (app " + castAppId() + ")"); return; }
@@ -1094,6 +1102,7 @@ function renderCastBar() {
   $("c-stop").onclick = () => { try { C.ctx.endCurrentSession(true); } catch (e) {} C.active = false; renderCastBar(); };
 }
 
+preloadCast();
 (function swipe() {
   let x0 = null, y0 = null;
   const v = $("viewer");
