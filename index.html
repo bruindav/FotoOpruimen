@@ -171,6 +171,20 @@
 .skel { aspect-ratio: 1; border-radius: 8px; background: linear-gradient(100deg, #1a2030 30%, #262f45 50%, #1a2030 70%); background-size: 300% 100%; animation: shimmer 1.3s linear infinite; }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @keyframes pulse { 50% { opacity: .65; } }
+.brandline { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: #e8ecf5; font-weight: 500; letter-spacing: .01em; }
+.brandline img { border-radius: 6px; }
+.sheet.info { max-width: 640px; max-height: 88vh; overflow: hidden; display: flex; flex-direction: column; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+.info-head, .info-tabs, .info-foot { flex: 0 0 auto; }
+.info-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.info-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+.info-tabs .tab { flex: 0 0 auto; padding: 8px 9px; font-size: 13.5px; }
+.info-body { overflow-y: auto; flex: 1 1 auto; min-height: 0; font-size: 14.5px; line-height: 1.5; padding-right: 4px; }
+.info-body h4 { margin: 16px 0 4px; font-size: 15px; color: #e9b866; }
+.info-body ul, .info-body ol { padding-left: 20px; margin: 4px 0; }
+.info-body li { margin: 5px 0; }
+.info-body code { background: #252831; padding: 1px 5px; border-radius: 5px; font-size: 12.5px; word-break: break-all; }
+.info-foot { display: flex; align-items: center; gap: 10px; justify-content: center; padding-top: 10px; margin-top: 8px; border-top: 1px solid var(--border); font-size: 12px; color: #8b93a7; }
+.info-foot .brandline span { display: none; }
 </style>
 </head>
 <body>
@@ -194,6 +208,8 @@
     <button class="btn primary" id="btn-login" style="width:100%">Inloggen met Google</button>
     <p class="muted" id="login-msg"></p>
     <button class="btn small" id="btn-change-client" style="margin-top:8px">Ander Client-ID gebruiken</button>
+    <p style="margin:14px 0 0"><a href="#" id="login-help" style="color:var(--muted,#9aa3b5)">Uitleg, disclaimer &amp; privacy</a></p>
+    <div style="margin-top:14px"><a class="brandline" href="https://bruindav.github.io/DigidaveStore/" target="_blank" rel="noopener" style="justify-content:center"><img src="digidave-logo.png" alt="" width="28" height="28"><span>digidave</span></a></div>
   </div>
 </main>
 
@@ -204,6 +220,7 @@
       <button class="btn small hidden" id="btn-back">←</button>
       <img src="favicon-32.png" alt="" width="28" height="28" style="border-radius:7px"><h1 id="title">Foto App</h1>
       <button class="btn small" id="btn-select">Selecteren</button>
+      <button class="btn small" id="btn-help" title="Uitleg, disclaimer en privacy">?</button>
       <button class="btn small" id="btn-beheer" title="Beheer">⚙</button>
       <button class="btn small" id="btn-logout">Uit</button>
     </div>
@@ -1267,7 +1284,123 @@ function setTabNow(t) {
   exitSelect();
   if (t === "clean" || t === "look") renderCleanHome(); else renderAlbumsHome();
 }
+// ------------------------------------------------------------------ help, disclaimer en privacy
+const DIGIDAVE_URL = "https://bruindav.github.io/DigidaveStore/";
+const brandHtml = `<a class="brandline" href="${DIGIDAVE_URL}" target="_blank" rel="noopener"><img src="digidave-logo.png" alt="" width="28" height="28"><span>digidave</span></a>`;
+const INFO = {
+  uitleg: ["Uitleg", `
+    <h4>Wat is dit?</h4>
+    <p>De Foto App is een persoonlijke fotoviewer voor je eigen Google Drive. Je foto's staan als kleine voorbeelden in Drive; de originelen staan op je laptop. Je bladert hier door je archief, maakt albums en kijkt naar je foto's op je telefoon of op de tv.</p>
+    <h4>Kijken</h4>
+    <ul>
+      <li><b>Kies een jaar</b> en daarna een map, of zoek een map op naam. Terug met de pijl linksboven.</li>
+      <li><b>Tik op een foto</b> voor de grote weergave. Veeg naar links of rechts voor de volgende foto, knijp of tik dubbel om in te zoomen.</li>
+      <li><b>▦</b> maakt de vakjes groter of kleiner. <b>♡</b> markeert een foto als beste foto; met <b>♥ Beste</b> zie je alleen die.</li>
+      <li><b>▶ Diavoorstelling</b>: schermvullend, met snelheid (⏱), willekeurig (🔀) en passen/vullen. Het scherm blijft aan.</li>
+      <li><b>⚠</b> bij een foto betekent: de opnamedatum wijkt af van het jaar van de map (de camera-klok stond waarschijnlijk niet goed). De foto blijft bij het jaar van de map.</li>
+      <li><b>🔍</b> in de grote weergave: de foto wordt bewaard en Google Lens opent, zodat je kunt opzoeken wat je ziet (gebouw, kerk, stad).</li>
+    </ul>
+    <h4>Albums</h4>
+    <p>In het tabblad Albums staan de albums die je op de laptop hebt gemaakt. Open een album om de foto's te zien of op de tv te zetten.</p>
+    <h4>Naar de tv (Chromecast)</h4>
+    <ul>
+      <li>Open de app in <b>Chrome</b> (niet in Vivaldi) en zorg dat telefoon en Chromecast op hetzelfde wifi zitten.</li>
+      <li>Tik <b>Naar tv</b> bij een map of album. De tv toont de foto's schermvullend met een rustige overgang en de naam van de map bij de eerste foto.</li>
+      <li>Onder in beeld staat de bediening: vorige/volgende, pauze, snelheid, passen/vullen en <b>🔗 Volg mijn map</b>: de tv toont dan automatisch elke map die je opent. Tik op de titelregel om de balk in te klappen.</li>
+    </ul>
+    <h4>Opruimen</h4>
+    <p>Standaard start de app in de viewer. Zet via <b>⚙</b> de optie <b>Opruimen tonen</b> aan voor het tabblad Opschonen: foto's markeren als <b>Weg</b> of <b>Houden</b>, verplaatsen naar een andere map of mappen samenvoegen. Dit zijn alleen <i>verzoeken</i>: er wordt niets van je laptop verwijderd totdat je ze daar controleert (zie het tabblad Laptop-app).</p>
+    <h4>Iets werkt niet?</h4>
+    <ul>
+      <li>Ontbreken er mappen of foto's? De laptop moet eerst "Voorbeelden naar Drive zetten" draaien; grote archieven kosten enkele dagen.</li>
+      <li>Telkens opnieuw inloggen? Sta cookies en sitegegevens toe voor deze pagina.</li>
+      <li>Casten lukt niet? Gebruik Chrome, hetzelfde wifi, en tik na het openen van de app een paar seconden later op Naar tv.</li>
+    </ul>`],
+  laptop: ["Laptop-app", `
+    <h4>Waar is de laptop-app voor?</h4>
+    <p>De laptop-app (op je eigen computer) is het hart van het systeem: daar staan je originelen en daar beheer je alles. Alles werkt lokaal; niets wordt gedeeld tenzij je zelf iets naar Google Drive laat zetten.</p>
+    <h4>Onderdelen</h4>
+    <ul>
+      <li><b>Beheerpaneel</b> (<code>beheer.py</code>): één venster met knoppen voor importeren, synchroniseren, de foto-app starten en hulp. Het logboek toont wat er gebeurt.</li>
+      <li><b>Foto-app</b> (in je browser op <code>http://127.0.0.1:5000</code>): foto's bekijken, filteren, taggen, in albums zetten, roteren, verbeteren, verplaatsen en dubbelen zoeken. Draait alleen op jouw laptop.</li>
+      <li><b>Database</b> (<code>photos.db</code>): de lijst van al je foto's met tags, albums en andere gegevens. Je foto's zelf blijven gewoon in je mappen staan.</li>
+    </ul>
+    <h4>Vaste volgorde</h4>
+    <ol>
+      <li><b>Importeren</b> van de fotomap in de database (en opnieuw na nieuwe foto's).</li>
+      <li><b>Voorbeelden naar Drive zetten</b>: kleine kopieën, mappenstructuur en jaartallen zodat deze telefoon-app ze kan tonen. Duurt bij 48.000 foto's enkele dagen en mag onderbroken worden; hij gaat verder waar hij bleef. Laat de laptop aan en online; de slaapstand wordt geblokkeerd zolang het draait.</li>
+      <li><b>Albums naar Drive</b> om albums uit de foto-app ook op je telefoon te zien.</li>
+      <li><b>Wijzigingen van telefoon ophalen</b> (proefdraai eerst, daarna doorvoeren). Je ziet in de foto-app bij <b>📱 Wijzigingen van telefoon</b> wat je op de telefoon als weg, verplaatsen of samenvoegen hebt aangegeven, en bevestigt het daar.</li>
+    </ol>
+    <h4>Veilig opruimen</h4>
+    <p>"Weg" op de telefoon verwijdert niets. Op de laptop controleer je de foto's en pas dan gaan ze naar de map <code>_te_verwijderen</code> (de prullenbak van het archief). Je kunt ze daar nog terughalen.</p>
+    <h4>Foto's van personen zoeken</h4>
+    <ul>
+      <li>Eenmalig installeren (opdrachtprompt): <code>pip install dlib-bin face_recognition_models</code>, daarna <code>pip install face_recognition --no-deps</code> en <code>pip install numpy pillow "setuptools&lt;81"</code>.</li>
+      <li>Klik in het beheerpaneel op <b>Gezichten scannen</b>. Dit duurt uren; stoppen en later verder kan. <b>Gemiste gezichten zoeken (grondig)</b> bekijkt foto's zonder gevonden gezicht nog eens, ook gedraaid.</li>
+      <li>Open een foto en geef onder <b>Wie staat erop?</b> een gezicht een naam (of teken met <b>➕ Gezicht aanwijzen</b> een gezicht dat gemist is). De app stelt daarna zelf namen voor bij andere foto's; bevestig met ✓.</li>
+      <li><b>👤 Personen</b>: kies personen, bekijk eerst de gevonden foto's, vink af wat niet klopt en voeg ze toe aan een album. Met <b>👥 Voorstellen controleren</b> bevestig je snel veel gezichten.</li>
+    </ul>
+    <h4>Als er iets misgaat</h4>
+    <ul>
+      <li><b>"Database bezet"</b>: een ander programma gebruikt photos.db. Sluit het of wacht even; synchronisaties proberen het vanzelf opnieuw.</li>
+      <li><b>Inlogfout bij Drive</b> (invalid_grant): de Google-inlog is verlopen. Het logboek vertelt welk bestand je moet verwijderen (<code>.fotoarchief\\token.json</code> in je gebruikersmap) en daarna log je opnieuw in.</li>
+      <li>Maak af en toe een kopie van <code>photos.db</code> als back-up (bewaar die niet in een gedeelde map).</li>
+    </ul>`],
+  disclaimer: ["Disclaimer", `
+    <h4>Disclaimer</h4>
+    <p>De Foto App is een persoonlijk hobbyproject van digidave en wordt aangeboden <b>zoals het is</b>, zonder enige garantie op juistheid, beschikbaarheid of geschiktheid voor een bepaald doel. Gebruik is voor eigen risico.</p>
+    <ul>
+      <li><b>Back-ups:</b> deze app is geen back-up. Zorg dat je foto's elders veilig bewaard zijn. Hoewel opruimacties pas na jouw bevestiging op de laptop worden uitgevoerd en verwijderde foto's eerst naar een map <code>_te_verwijderen</code> gaan, kan de maker niet aansprakelijk worden gesteld voor verlies of beschadiging van foto's of gegevens.</li>
+      <li><b>Toegang tot Google Drive:</b> de app vraagt toegang tot je Google Drive om voorbeelden te lezen en eigenschappen en mappen aan te passen. Gebruik daarvoor bij voorkeur je eigen account. Je kunt de toegang altijd intrekken via je Google-account (Beveiliging &rarr; Apps met toegang tot je account).</li>
+      <li><b>Gezichtsherkenning</b> werkt met een rekenmethode en maakt fouten: personen kunnen verkeerd, of niet worden herkend. Controleer altijd de resultaten voordat je ze deelt.</li>
+      <li><b>Diensten van derden</b> (Google Drive, Google Cast/Chromecast, Google Lens, GitHub Pages) vallen onder hun eigen voorwaarden en kunnen zonder bericht veranderen of stoppen. Deze app is niet gelieerd aan of goedgekeurd door Google. Google, Drive, Chromecast en Lens zijn merken van Google LLC.</li>
+      <li>De app kan worden gewijzigd of stopgezet zonder voorafgaande kennisgeving.</li>
+    </ul>
+    <p>Vragen of opmerkingen? Je vindt de maker via het overzicht van digidave.</p>`],
+  privacy: ["Privacy", `
+    <h4>Privacyverklaring</h4>
+    <p>Kort gezegd: <b>je foto's blijven van jou</b>. De maker heeft geen server en ziet je foto's, gegevens of inlog niet.</p>
+    <h4>Hoe werkt het technisch?</h4>
+    <ul>
+      <li>Deze pagina is een statische webpagina op GitHub Pages. De code draait in <b>je eigen browser</b> en praat rechtstreeks met <b>jouw Google Drive</b>, met je eigen Google-inlog. Er is geen database of server van de maker waar je gegevens heen gaan.</li>
+      <li>De pagina bewaart in je browser alleen voorkeuren (zoals tegelgrootte en diavoorstelling), tellingen van mappen, je e-mailadres als inlogtip en een kortdurende toegangscode van Google (die na ongeveer een uur verloopt). Dat is lokaal en verdwijnt als je de sitegegevens van je browser wist.</li>
+      <li>Je foto's (kleine voorbeelden) staan in jouw Drive-map "Foto Archief Voorbeelden"; albums in "Foto Archief Albums". Markeringen (weg/houden, ♥, verplaatsen) worden als eigenschap bij het bestand in jouw Drive bewaard.</li>
+    </ul>
+    <h4>Welke toegang vraagt de app?</h4>
+    <p>Toegang tot je Google Drive (om voorbeelden te lezen en mappen, albums en eigenschappen aan te passen). Je kunt dit altijd intrekken in je Google-account.</p>
+    <h4>Casten naar de tv</h4>
+    <p>Voor casten laadt de tv een ontvangerpagina van deze app (GitHub Pages). Telefoon en tv krijgen de lijst met foto-links en een kortdurende toegangscode om de voorbeelden uit jouw Drive te tonen. Dit gebeurt via de Google Cast-dienst; zie het privacybeleid van Google.</p>
+    <h4>Google Lens (🔍)</h4>
+    <p>De foto wordt op je telefoon bewaard; daarna upload je hem zelf in Google Lens. Voor die verwerking geldt het privacybeleid van Google.</p>
+    <h4>De laptop-app</h4>
+    <ul>
+      <li>Je originele foto's, de database, tags, albums en <b>gezichtsgegevens</b> (numerieke kenmerken van gezichten en de namen die jij koppelt) blijven <b>uitsluitend op je eigen laptop</b>. Ze gaan niet naar Drive, GitHub of deze webapp.</li>
+      <li>De foto-app op de laptop is alleen bereikbaar via dit apparaat (127.0.0.1) en weigert verzoeken van andere websites.</li>
+      <li>Gezichtsgegevens zijn persoonsgegevens, ook van anderen. Gebruik ze alleen voor persoonlijk of huishoudelijk gebruik, deel <code>photos.db</code> niet met anderen, en bewaar hem niet in een gedeelde of gesynchroniseerde map. Een persoon en zijn gezichtsgegevens verwijder je in <b>👤 Personen</b> met het kruisje.</li>
+    </ul>
+    <h4>Je rechten en vragen</h4>
+    <p>Wil je alles wissen? Wis de sitegegevens van deze pagina in je browser, trek de toegang in via je Google-account, en verwijder de mappen "Foto Archief Voorbeelden" en "Foto Archief Albums" uit je Drive. Vragen? Neem contact op via het overzicht van digidave.</p>`],
+};
+function openInfo(tab) {
+  const sh = $("sheet");
+  if (navTop() !== "sheet") pushNav("sheet");
+  sh.className = "sheet-bg";
+  const keys = Object.keys(INFO);
+  tab = INFO[tab] ? tab : "uitleg";
+  sh.innerHTML = `<div class="sheet info">
+    <div class="info-head">${brandHtml}<button class="btn small" id="info-close">✕</button></div>
+    <div class="info-tabs">${keys.map((k) => `<button class="tab ${k === tab ? "active" : ""}" data-k="${k}">${INFO[k][0]}</button>`).join("")}</div>
+    <div class="info-body">${INFO[tab][1]}</div>
+    <div class="info-foot">${brandHtml}<span>Foto App &middot; een project van digidave</span></div></div>`;
+  $("info-close").onclick = closeSheet;
+  sh.onclick = (e) => { if (e.target === sh) closeSheet(); };
+  sh.querySelectorAll(".info-tabs .tab").forEach((b) => { b.onclick = () => openInfo(b.dataset.k); });
+  sh.querySelector(".info-body").scrollTop = 0;
+}
+
 $("tab-look").onclick = () => setTab("look");
+$("btn-help").onclick = () => openInfo("uitleg");
 $("btn-beheer").onclick = () => {
   const sh = $("sheet"); pushNav("sheet"); sh.className = "sheet-bg";
   sh.innerHTML = `<div class="sheet"><h3>Beheer</h3>
@@ -1302,6 +1435,7 @@ $("btn-save-client").onclick = () => {
   lsSet("fo_client_id", v); start();
 };
 $("btn-change-client").onclick = () => { $("client-id").value = lsGet("fo_client_id") || ""; showView("setup"); };
+$("login-help").onclick = (e) => { e.preventDefault(); openInfo("uitleg"); };
 $("btn-login").onclick = async () => {
   $("login-msg").textContent = "";
   try { await initTokenClient(); await requestToken(true); enterApp(); }
