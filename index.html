@@ -161,6 +161,7 @@
   .sheet { background: var(--panel); width: 100%; max-width: 560px; max-height: 80vh; overflow: auto; border-radius: 16px 16px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
   .sheet h3 { margin: 0 0 10px; }
   .loading { text-align: center; color: var(--muted); padding: 30px 0; }
+.castico{vertical-align:-3px}
 </style>
 </head>
 <body>
@@ -594,7 +595,7 @@ function renderItems() {
   const favN = S.items.filter(isFav).length;
   document.documentElement.style.setProperty("--th", S.tileH + "px");
   const sizeName = (TILE_SIZES.find((x) => x[1] === S.tileH) || TILE_SIZES[1])[0];
-  const showChip = `<button class="chip" id="album-show">▶ Diavoorstelling</button><button class="chip" id="tile-size" title="Grootte van de foto's">▦ ${sizeName}</button>${castAppId() ? '<button class="chip" id="cast-btn">📺 Naar tv</button>' : ""}`;
+  const showChip = `<button class="chip" id="album-show">▶ Diavoorstelling</button><button class="chip" id="tile-size" title="Grootte van de foto's">▦ ${sizeName}</button>${castAppId() ? '<button class="chip" id="cast-btn"><svg class="castico" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M21 3H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11z"/></svg> Naar tv</button>' : ""}`;
   const chips = isAlbum ? `<div class="filters">${[["all", "Alles " + S.items.length], ["fav", "♥ Beste " + favN]].map(([k, l]) => `<button class="chip ${S.filter === k ? "active" : ""}" data-f="${k}">${l}</button>`).join("")}${showChip}</div>` : S.look ? `<div class="filters">${[["all", "Alles " + S.items.length], ["fav", "♥ Beste " + favN]].map(([k, l]) => `<button class="chip ${S.filter === k ? "active" : ""}" data-f="${k}">${l}</button>`).join("")}${showChip}</div>` : `<div class="filters">
       ${[["all", "Alles " + S.items.length], ["fav", "♥ " + favN], ["open", "Open " + n.open], ["weg", "Weg " + n.weg], ["houd", "Behouden " + n.houd], ["move", "Verplaatsen " + n.move]]
         .map(([k, l]) => `<button class="chip ${S.filter === k ? "active" : ""}" data-f="${k}">${l}</button>`).join("")}${showChip}</div>`;
@@ -830,7 +831,7 @@ function renderViewer() {
   const album = S.view === "album";
   const v = $("viewer");
   v.innerHTML = `
-    <div class="vtop"><button class="btn small" id="v-close">✕</button><button class="btn small" id="v-show" title="Diavoorstelling">▶</button>${castAppId() ? '<button class="btn small" id="v-cast" title="Naar tv">📺</button>' : ""}<button class="btn small ${isFav(f) ? "favon" : ""}" id="v-fav" title="Beste foto">${isFav(f) ? "♥" : "♡"}</button>
+    <div class="vtop"><button class="btn small" id="v-close">✕</button><button class="btn small" id="v-show" title="Diavoorstelling">▶</button>${castAppId() ? '<button class="btn small" id="v-cast" title="Naar tv"><svg class="castico" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M21 3H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11z"/></svg></button>' : ""}<button class="btn small ${isFav(f) ? "favon" : ""}" id="v-fav" title="Beste foto">${isFav(f) ? "♥" : "♡"}</button>
       <span class="showonly"><button class="btn small" id="v-speed" title="Snelheid">⏱ ${showCfg.sec}s</button><button class="btn small ${showCfg.shuffle ? "favon" : ""}" id="v-shuf" title="Willekeurige volgorde">🔀</button><button class="btn small" id="v-fit" title="Beeld vullen of hele foto tonen">${showCfg.fit === "cover" ? "⤡ vullen" : "⤢ passen"}</button></span>
       <div class="vtitle"><div>${esc(cleanName(f.name))}</div><div>${esc(folder)} · ${vIndex + 1}/${vList.length}</div>${dateMismatch(f) ? `<div style="color:#ffd27a">⚠ datum in foto: ${dateMismatch(f).ey}, map: ${dateMismatch(f).yr}</div>` : ""}</div></div>
     <div class="vimg ${m}" id="v-img">
@@ -1050,7 +1051,7 @@ function renderCastBar() {
   if (!C.active) { b.classList.add("hidden"); return; }
   const st = C.st || {}, dev = C.session && C.session.getCastDevice ? C.session.getCastDevice().friendlyName : "tv";
   b.classList.remove("hidden");
-  b.innerHTML = `<div class="ctitle">📺 Op ${esc(dev)} · ${st.total ? (st.pos + 1) + " / " + st.total : "…"}</div>
+  b.innerHTML = `<div class="ctitle"><svg class="castico" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M21 3H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11z"/></svg> Op ${esc(dev)} · ${st.total ? (st.pos + 1) + " / " + st.total : "…"}</div>
     <button class="btn" id="c-prev">⏮</button><button class="btn primary" id="c-play">${st.playing === false ? "▶" : "⏸"}</button><button class="btn" id="c-next">⏭</button>
     <button class="btn" id="c-speed">⏱ ${showCfg.sec}s</button><button class="btn ${showCfg.shuffle ? "favon" : ""}" id="c-shuf">🔀</button>
     <button class="btn" id="c-fit">${showCfg.fit === "cover" ? "⤡ vullen" : "⤢ passen"}</button><button class="btn danger" id="c-stop">⏹ Stop</button>`;
