@@ -139,7 +139,10 @@
   #castbar { position: fixed; left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); z-index: 70; background: #1c2230; border: 1px solid #3a4560; border-radius: 16px; padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; box-shadow: 0 6px 24px rgba(0,0,0,.5); }
   #castbar.hidden { display: none; }
   #castbar .ctitle { flex: 1 1 100%; font-size: 14px; color: #c9d1e3; }
-  #castbar .btn { min-width: 44px; }
+  #castbar .btn { min-width: 40px; padding: 6px 9px; font-size: 14px; }
+  #castbar .ctitle { cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  #castbar .ctitle .cmin { margin-left: auto; opacity: .7; padding: 0 4px; }
+  #castbar.min { padding: 6px 10px; }
   #viewer .favon { color: #ff6b81; }
   #viewer.show .vimg img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: contain; transition: opacity 1.4s ease-in-out; }
   #viewer.show.fitcover .vimg img { object-fit: cover; }
@@ -1090,21 +1093,23 @@ function onCastSession(ev) {
 function onCastMsg(m) { if (m && m.type === "status") { C.st = m; renderCastBar(); } }
 function renderCastBar() {
   const b = $("castbar");
-  if (!C.active) { b.classList.add("hidden"); return; }
+  if (!C.active) { b.classList.add("hidden"); document.body.style.paddingBottom = ""; return; }
   const st = C.st || {}, dev = C.session && C.session.getCastDevice ? C.session.getCastDevice().friendlyName : "tv";
-  b.classList.remove("hidden");
-  b.innerHTML = `<div class="ctitle"><svg class="castico" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M21 3H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11z"/></svg> Op ${esc(dev)} · ${st.total ? (st.pos + 1) + " / " + st.total : "…"}</div>
+  b.classList.remove("hidden"); b.classList.toggle("min", !!C.min);
+  b.innerHTML = `<div class="ctitle"><svg class="castico" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M21 3H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11z"/></svg> Op ${esc(dev)} · ${st.total ? (st.pos + 1) + " / " + st.total : "…"}<span class="cmin">${C.min ? "▲" : "▼"}</span></div>
     <button class="btn" id="c-prev">⏮</button><button class="btn primary" id="c-play">${st.playing === false ? "▶" : "⏸"}</button><button class="btn" id="c-next">⏭</button>
-    <button class="btn" id="c-speed">⏱ ${showCfg.sec}s</button><button class="btn ${showCfg.shuffle ? "favon" : ""}" id="c-shuf">🔀</button>
-    <button class="btn" id="c-fit">${showCfg.fit === "cover" ? "⤡ vullen" : "⤢ passen"}</button><button class="btn ${C.follow ? "favon" : ""}" id="c-follow" title="Als dit aan staat, toont de tv automatisch de map of het album dat je opent">🔗 Volg mijn map</button><button class="btn danger" id="c-stop">⏹ Stop</button>`;
-  $("c-follow").onclick = () => { C.follow = !C.follow; lsSet("fo_cast_follow", C.follow ? "1" : "0"); if (C.follow) C.lastKey = null; renderCastBar(); if (C.follow) maybeFollowCast(); };
+    ${C.min ? "" : `<button class="btn" id="c-speed">⏱ ${showCfg.sec}s</button><button class="btn ${showCfg.shuffle ? "favon" : ""}" id="c-shuf">🔀</button>
+    <button class="btn" id="c-fit">${showCfg.fit === "cover" ? "⤡ vullen" : "⤢ passen"}</button><button class="btn ${C.follow ? "favon" : ""}" id="c-follow" title="Als dit aan staat, toont de tv automatisch de map of het album dat je opent">🔗 Volg mijn map</button><button class="btn danger" id="c-stop">⏹ Stop</button>`}`;
+  if ($("c-follow")) $("c-follow").onclick = () => { C.follow = !C.follow; lsSet("fo_cast_follow", C.follow ? "1" : "0"); if (C.follow) C.lastKey = null; renderCastBar(); if (C.follow) maybeFollowCast(); };
+  b.querySelector(".ctitle").onclick = () => { C.min = !C.min; renderCastBar(); };
+  document.body.style.paddingBottom = (b.offsetHeight + 24) + "px";       // zodat de balk geen mappen/foto's afdekt
   $("c-prev").onclick = () => castSend({ cmd: "prev" });
   $("c-next").onclick = () => castSend({ cmd: "next" });
   $("c-play").onclick = () => castSend({ cmd: st.playing === false ? "play" : "pause" });
-  $("c-speed").onclick = () => { const o = [3, 6, 10, 20]; showCfg.sec = o[(o.indexOf(showCfg.sec) + 1) % o.length]; lsSet("fo_show_sec", String(showCfg.sec)); castSend({ cmd: "cfg", sec: showCfg.sec }); renderCastBar(); };
-  $("c-shuf").onclick = () => { showCfg.shuffle = !showCfg.shuffle; lsSet("fo_show_shuf", showCfg.shuffle ? "1" : "0"); castSend({ cmd: "cfg", shuffle: showCfg.shuffle }); renderCastBar(); };
-  $("c-fit").onclick = () => { showCfg.fit = showCfg.fit === "cover" ? "contain" : "cover"; lsSet("fo_show_fit", showCfg.fit); castSend({ cmd: "cfg", fit: showCfg.fit }); renderCastBar(); };
-  $("c-stop").onclick = () => { try { C.ctx.endCurrentSession(true); } catch (e) {} C.active = false; renderCastBar(); };
+  if ($("c-speed")) $("c-speed").onclick = () => { const o = [3, 6, 10, 20]; showCfg.sec = o[(o.indexOf(showCfg.sec) + 1) % o.length]; lsSet("fo_show_sec", String(showCfg.sec)); castSend({ cmd: "cfg", sec: showCfg.sec }); renderCastBar(); };
+  if ($("c-shuf")) $("c-shuf").onclick = () => { showCfg.shuffle = !showCfg.shuffle; lsSet("fo_show_shuf", showCfg.shuffle ? "1" : "0"); castSend({ cmd: "cfg", shuffle: showCfg.shuffle }); renderCastBar(); };
+  if ($("c-fit")) $("c-fit").onclick = () => { showCfg.fit = showCfg.fit === "cover" ? "contain" : "cover"; lsSet("fo_show_fit", showCfg.fit); castSend({ cmd: "cfg", fit: showCfg.fit }); renderCastBar(); };
+  if ($("c-stop")) $("c-stop").onclick = () => { try { C.ctx.endCurrentSession(true); } catch (e) {} C.active = false; renderCastBar(); };
 }
 
 preloadCast();
