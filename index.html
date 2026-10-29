@@ -991,7 +991,10 @@ function nav(d, fromMark) {
 // Werkt met de eigen Chromecast-ontvanger (receiver.html) en alleen in Google Chrome (niet in Vivaldi).
 const CAST_NS = "urn:x-cast:nl.fotoapp.slides";
 const DEFAULT_CAST_APP_ID = "4CB01DAA";
-const castAppId = () => lsGet("fo_cast_app_id") || DEFAULT_CAST_APP_ID;
+const castAppId = () => {            // een opgeslagen ID telt alleen als het er echt uitziet als een Cast-ID (8 tekens)
+  const v = String(lsGet("fo_cast_app_id") || "").trim().toUpperCase();
+  return /^[0-9A-F]{8}$/.test(v) ? v : DEFAULT_CAST_APP_ID;
+};
 const C = { loaded: null, ctx: null, session: null, active: false, st: null, listening: null };
 function loadCastSdk() {
   if (C.loaded) return C.loaded;
@@ -1020,7 +1023,7 @@ async function startCast(list, index) {
     C.ctx.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, onCastSession);
   }
   try { if (!C.ctx.getCurrentSession()) await C.ctx.requestSession(); }
-  catch (e) { if (e !== "cancel") toast("Verbinden met de tv mislukt: " + (e && e.description ? e.description : e)); return; }
+  catch (e) { if (e !== "cancel") toast("Verbinden met de tv mislukt: " + (e && e.description ? e.description : e) + " (app " + castAppId() + ")"); return; }
   attachCastSession();
   if (!C.session) return;
   await sendCastList(list, index);
