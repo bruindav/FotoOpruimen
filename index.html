@@ -989,7 +989,7 @@ function nav(d, fromMark) {
 // ------------------------------------------------------------------ casten naar de tv
 // Werkt met de eigen Chromecast-ontvanger (receiver.html) en alleen in Google Chrome (niet in Vivaldi).
 const CAST_NS = "urn:x-cast:nl.fotoapp.slides";
-const DEFAULT_CAST_APP_ID = "";
+const DEFAULT_CAST_APP_ID = "4CB01DAA";
 const castAppId = () => lsGet("fo_cast_app_id") || DEFAULT_CAST_APP_ID;
 const C = { loaded: null, ctx: null, session: null, active: false, st: null, listening: null };
 function loadCastSdk() {
