@@ -611,6 +611,18 @@ function renderItems() {
   if (!vis.length) grid.innerHTML = '<div class="muted" style="padding:20px 0">Niets te tonen.</div>';
   vis.forEach((f, idx) => grid.appendChild(makeTile(f, idx)));
   updateBulk();
+  maybeFollowCast();
+}
+function castKey() { return [S.view, S.current && (S.current.id || S.current.year), S.yearFolder || ""].join("|"); }
+function maybeFollowCast() {        // tv volgt automatisch de map/het album dat je opent (aan/uit via de castbalk)
+  if (typeof C === "undefined" || !C.active || !C.follow || !C.session) return;
+  if (S.view === "year" && !S.yearFolder) return;
+  const key = castKey();
+  if (key === C.lastKey) return;
+  const list = visibleItems();
+  if (!list.length) return;
+  C.lastKey = key;
+  startCast(list, 0);
 }
 
 function dateMismatch(f) {      // opnamedatum (EXIF-jaar) wijkt af van het jaar van de map
@@ -995,7 +1007,7 @@ const castAppId = () => {            // een opgeslagen ID telt alleen als het er
   const v = String(lsGet("fo_cast_app_id") || "").trim().toUpperCase();
   return /^[0-9A-F]{8}$/.test(v) ? v : DEFAULT_CAST_APP_ID;
 };
-const C = { loaded: null, ctx: null, session: null, active: false, st: null, listening: null };
+const C = { loaded: null, ctx: null, session: null, active: false, st: null, listening: null, follow: lsGet("fo_cast_follow") !== "0", lastKey: null };
 function loadCastSdk() {
   if (C.loaded) return C.loaded;
   C.loaded = new Promise((resolve) => {
@@ -1010,6 +1022,20 @@ function loadCastSdk() {
 }
 function castSend(obj) {
   try { return C.session ? C.session.sendMessage(CAST_NS, obj) : Promise.resolve(); } catch (e) { return Promise.resolve(); }
+}
+function castTitle(list) {          // tekst voor op de tv bij de eerste foto: mapnaam + jaar
+  const last = (p) => String(p || "").split(" / ").pop().trim();
+  let title = "", sub = "";
+  const first = list[0] || {};
+  if (S.view === "album" && S.current) { title = S.current.name; sub = "Album"; }
+  else if (S.view === "year" && S.current) {
+    title = S.yearFolder && S.yearFolder !== "*" ? last(S.folderNames && S.folderNames[S.yearFolder]) : "Alle foto's";
+    sub = String(S.current.year || "");
+  } else if (S.view === "folder" && S.current) {
+    title = last(S.current.name);
+    sub = (first.properties && first.properties.yr) || "";
+  } else { title = last((first.parents || []).map((p) => S.folderNames[p]).filter(Boolean)[0]); sub = (first.properties && first.properties.yr) || ""; }
+  return { title: title || "", sub: sub || "" };
 }
 async function startCast(list, index) {
   if (!castAppId()) { toast("Casten is nog niet ingesteld"); return; }
@@ -1039,8 +1065,8 @@ async function sendCastList(list, index) {
   const items = list.filter((f) => f.thumbnailLink).map((f) => ({ i: f.id, u: f.thumbnailLink.replace(/=s\d+(-c)?$/, ""), n: cleanName(f.name) }));
   const startAt = Math.max(0, items.findIndex((x) => list[index] && x.i === list[index].id));
   for (let i = 0; i < items.length; i += 80) await castSend({ cmd: "list", reset: i === 0, items: items.slice(i, i + 80) });
-  await castSend({ cmd: "start", index: startAt, sec: showCfg.sec, fit: showCfg.fit, shuffle: showCfg.shuffle, play: true, token });
-  C.active = true; C.st = { pos: 0, total: items.length, playing: true };
+  await castSend({ cmd: "start", index: startAt, sec: showCfg.sec, fit: showCfg.fit, shuffle: showCfg.shuffle, play: true, token, ...castTitle(list) });
+  C.active = true; C.st = { pos: 0, total: items.length, playing: true }; C.lastKey = castKey();
   renderCastBar();
 }
 function onCastSession(ev) {
@@ -1057,7 +1083,8 @@ function renderCastBar() {
   b.innerHTML = `<div class="ctitle"><svg class="castico" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M21 3H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11z"/></svg> Op ${esc(dev)} · ${st.total ? (st.pos + 1) + " / " + st.total : "…"}</div>
     <button class="btn" id="c-prev">⏮</button><button class="btn primary" id="c-play">${st.playing === false ? "▶" : "⏸"}</button><button class="btn" id="c-next">⏭</button>
     <button class="btn" id="c-speed">⏱ ${showCfg.sec}s</button><button class="btn ${showCfg.shuffle ? "favon" : ""}" id="c-shuf">🔀</button>
-    <button class="btn" id="c-fit">${showCfg.fit === "cover" ? "⤡ vullen" : "⤢ passen"}</button><button class="btn danger" id="c-stop">⏹ Stop</button>`;
+    <button class="btn" id="c-fit">${showCfg.fit === "cover" ? "⤡ vullen" : "⤢ passen"}</button><button class="btn ${C.follow ? "favon" : ""}" id="c-follow" title="Als dit aan staat, toont de tv automatisch de map of het album dat je opent">🔗 Volg mijn map</button><button class="btn danger" id="c-stop">⏹ Stop</button>`;
+  $("c-follow").onclick = () => { C.follow = !C.follow; lsSet("fo_cast_follow", C.follow ? "1" : "0"); if (C.follow) C.lastKey = null; renderCastBar(); if (C.follow) maybeFollowCast(); };
   $("c-prev").onclick = () => castSend({ cmd: "prev" });
   $("c-next").onclick = () => castSend({ cmd: "next" });
   $("c-play").onclick = () => castSend({ cmd: st.playing === false ? "play" : "pause" });

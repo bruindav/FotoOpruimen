@@ -10,6 +10,10 @@
   body.cover .layer { object-fit: cover; }
   #idle { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5vh; color: #9aa3b5; font-size: 3vw; transition: opacity .6s; }
   #idle small { font-size: 1.7vw; color: #6c768a; }
+  #cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 9vh 5vw 5vh; background: linear-gradient(to top, rgba(0,0,0,.75), rgba(0,0,0,0)); opacity: 0; transition: opacity 1.2s ease-in-out; pointer-events: none; }
+  #cap.on { opacity: 1; }
+  #cap .t { font-size: 4.2vw; font-weight: 600; line-height: 1.15; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
+  #cap .s { font-size: 2.6vw; color: #d9dde6; margin-top: .6vh; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
   #hud { position: absolute; left: 2.5vw; bottom: 3vh; padding: .35em 1em; border-radius: 99px; background: rgba(0,0,0,.6); font-size: 1.7vw; opacity: 0; transition: opacity .4s; }
   #hud.on { opacity: 1; }
 </style>
@@ -17,6 +21,7 @@
 <body>
 <img class="layer" id="la" alt=""><img class="layer" id="lb" alt="">
 <div id="idle"><div>📷 Foto App</div><small>Kies op je telefoon een map of album en tik op "📺 Naar tv"</small></div>
+<div id="cap"><div class="t"></div><div class="s"></div></div>
 <div id="hud"></div>
 
 <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
@@ -28,7 +33,7 @@ const NS = "urn:x-cast:nl.fotoapp.slides";
 const $ = (id) => document.getElementById(id);
 const R = {
   items: [], order: [], idx: 0, sec: 6, fit: "contain", shuffle: false, playing: true, token: null,
-  timer: null, front: "la", errors: 0, seq: 0,
+  timer: null, front: "la", errors: 0, seq: 0, caption: null,
 };
 let context = null;
 
@@ -81,8 +86,18 @@ async function show(i) {
   $("idle").style.opacity = 0;
   back.style.opacity = 1; front.style.opacity = 0; R.front = next;
   status();
+  if (R.caption) { showCaption(R.caption); R.caption = null; }
   const nx = R.order[(R.idx + 1) % R.order.length]; if (nx) new Image().src = size(nx.u);       // volgende alvast ophalen
   schedule();
+}
+function showCaption(c) {            // mapnaam + jaar, een paar seconden over de eerste foto
+  const cap = $("cap");
+  cap.querySelector(".t").textContent = c.title || "";
+  cap.querySelector(".s").textContent = c.sub || "";
+  clearTimeout(showCaption.t);
+  if (!c.title && !c.sub) { cap.classList.remove("on"); return; }
+  setTimeout(() => cap.classList.add("on"), 700);
+  showCaption.t = setTimeout(() => cap.classList.remove("on"), 7000);
 }
 function schedule() {
   clearTimeout(R.timer);
@@ -100,6 +115,8 @@ function handle(m) {
       if (m.token) R.token = m.token;
       document.body.classList.toggle("cover", R.fit === "cover");
       rebuildOrder(m.index || 0);
+      R.caption = (m.title || m.sub) ? { title: m.title, sub: m.sub } : null;
+      $("cap").classList.remove("on");
       show(R.idx);
       break;
     case "token": R.token = m.token; break;
