@@ -366,16 +366,13 @@ async function lensSearch(f) {      // "Wat is dit?": foto delen met Google Lens
     const r = await fetch(`${API}/files/${f.id}?alt=media`, { headers: { Authorization: "Bearer " + token } });
     if (!r.ok) throw new Error("ophalen mislukt (" + r.status + ")");
     const file = new File([await r.blob()], "foto.jpg", { type: "image/jpeg" });
-    if (window.DataTransfer) {                         // foto rechtstreeks naar Google Afbeeldingen / Lens sturen (opent in een nieuw tabblad)
-      const dt = new DataTransfer(); dt.items.add(file);
-      const form = document.createElement("form");
-      form.method = "POST"; form.enctype = "multipart/form-data"; form.target = "_blank";
-      form.action = "https://www.google.com/searchbyimage/upload";
-      const inp = document.createElement("input"); inp.type = "file"; inp.name = "encoded_image"; inp.files = dt.files;
-      form.appendChild(inp); document.body.appendChild(form); form.submit(); form.remove();
-    } else if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: "Wat is dit?" });          // reserve: deelmenu, kies Lens of de Google-app
-    } else toast("Zoeken met een foto wordt door deze browser niet ondersteund");
+    // Google accepteert geen foto's meer rechtstreeks vanaf een andere website (403): bewaar de foto op de telefoon
+    // en open Lens; daar kies je met "Foto uploaden" de zojuist bewaarde foto.
+    const url = URL.createObjectURL(file);
+    const a = document.createElement("a"); a.href = url; a.download = "wat-is-dit.jpg"; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    toast("Foto bewaard. In Lens: kies 'Foto uploaden' en tik op de zojuist bewaarde foto (wat-is-dit.jpg)");
+    setTimeout(() => window.open("https://lens.google.com/", "_blank", "noopener"), 1200);
   } catch (e) { if (e && e.name !== "AbortError") toast("Zoeken mislukt: " + (e.message || e)); }
 }
 function setImg(img, f, size) {
