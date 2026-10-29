@@ -366,16 +366,16 @@ async function lensSearch(f) {      // "Wat is dit?": foto delen met Google Lens
     const r = await fetch(`${API}/files/${f.id}?alt=media`, { headers: { Authorization: "Bearer " + token } });
     if (!r.ok) throw new Error("ophalen mislukt (" + r.status + ")");
     const file = new File([await r.blob()], "foto.jpg", { type: "image/jpeg" });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: "Wat is dit?" });          // kies in het deelmenu "Lens" of de Google-app
-      return;
-    }
-    const dt = new DataTransfer(); dt.items.add(file);                          // geen deelmenu: foto direct naar Google Afbeeldingen sturen
-    const form = document.createElement("form");
-    form.method = "POST"; form.enctype = "multipart/form-data"; form.target = "_blank";
-    form.action = "https://www.google.com/searchbyimage/upload";
-    const inp = document.createElement("input"); inp.type = "file"; inp.name = "encoded_image"; inp.files = dt.files;
-    form.appendChild(inp); document.body.appendChild(form); form.submit(); form.remove();
+    if (window.DataTransfer) {                         // foto rechtstreeks naar Google Afbeeldingen / Lens sturen (opent in een nieuw tabblad)
+      const dt = new DataTransfer(); dt.items.add(file);
+      const form = document.createElement("form");
+      form.method = "POST"; form.enctype = "multipart/form-data"; form.target = "_blank";
+      form.action = "https://www.google.com/searchbyimage/upload";
+      const inp = document.createElement("input"); inp.type = "file"; inp.name = "encoded_image"; inp.files = dt.files;
+      form.appendChild(inp); document.body.appendChild(form); form.submit(); form.remove();
+    } else if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: "Wat is dit?" });          // reserve: deelmenu, kies Lens of de Google-app
+    } else toast("Zoeken met een foto wordt door deze browser niet ondersteund");
   } catch (e) { if (e && e.name !== "AbortError") toast("Zoeken mislukt: " + (e.message || e)); }
 }
 function setImg(img, f, size) {
