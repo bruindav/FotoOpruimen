@@ -1024,7 +1024,12 @@ function castSend(obj) {
   try { return C.session ? C.session.sendMessage(CAST_NS, obj) : Promise.resolve(); } catch (e) { return Promise.resolve(); }
 }
 function castTitle(list) {          // tekst voor op de tv bij de eerste foto: mapnaam + jaar
-  const last = (p) => String(p || "").split(" / ").pop().trim();
+  const hasDate = (t) => /(^|\D)(19|20)\d{2}(\D|$)|\d{6,8}/.test(t);
+  const last = (p) => {              // mapnaam; staat er geen datum in, dan ook de bovenliggende map (het is dan een submap)
+    const parts = String(p || "").split(" / ").map((x) => x.trim()).filter(Boolean);
+    const n = parts.pop() || "";
+    return !hasDate(n) && parts.length ? parts.pop() + " › " + n : n;
+  };
   let title = "", sub = "";
   const first = list[0] || {};
   if (S.view === "album" && S.current) { title = S.current.name; sub = "Album"; }
