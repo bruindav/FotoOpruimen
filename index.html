@@ -712,7 +712,7 @@ function makeTile(f, idx) {
   const dm = dateMismatch(f);
   const img = document.createElement("img"); img.loading = "lazy"; img.alt = "";
   setImg(img, f, S.tileH > 150 ? 640 : 400); t.appendChild(img);
-  t.insertAdjacentHTML("beforeend", (m ? `<span class="badge">${m === "weg" ? "🗑 weg" : "✓"}</span>` : mv ? `<span class="badge">→ ${esc(S.folderNames[mv] || "map")}</span>` : "") + (isFav(f) ? '<span class="favflag">♥</span>' : "") + (dm ? `<span class="dmflag" title="Datum in de foto wijkt af van de map">⚠ camera ${dm.ey}</span>` : "") + '<span class="check">✓</span>');
+  t.insertAdjacentHTML("beforeend", (m ? `<span class="badge" title="${esc((f.properties && f.properties.by) ? "gemarkeerd door " + f.properties.by : "")}">${m === "weg" ? "🗑 weg" : "✓"}${(f.properties && f.properties.by && S.tileH > 150) ? " · " + esc(f.properties.by) : ""}</span>` : mv ? `<span class="badge">→ ${esc(S.folderNames[mv] || "map")}</span>` : "") + (isFav(f) ? '<span class="favflag">♥</span>' : "") + (dm ? `<span class="dmflag" title="Datum in de foto wijkt af van de map">⚠ camera ${dm.ey}</span>` : "") + '<span class="check">✓</span>');
   t.onclick = () => {
     if (S.selecting) toggleSelect(f.id, t);
     else openViewer(idx);
@@ -753,7 +753,7 @@ async function setProps(files, patch) {
 
 async function setMarks(files, value) {
   // value: "weg" | "houd" | "" (alles wissen). Weg of wissen haalt ook een verplaats-verzoek weg.
-  const patch = { mark: value || null };
+  const patch = { mark: value || null, by: value ? myName() : null };
   if (value !== "houd") { patch.mv = null; patch.mvf = null; }
   return setProps(files, patch);
 }
@@ -1273,7 +1273,11 @@ async function removeFromAlbum() {
 
 // ------------------------------------------------------------------ navigatie
 function setTab(t) { unwindThen(() => setTabNow(t)); }
-const isAdmin = () => lsGet("fo_admin") === "1";
+// Alleen deze Google-accounts mogen opruimen/markeren/verplaatsen. Iedereen anders (bv. partner) kan alleen kijken.
+const OWNER_EMAILS = ["davedebruin123@gmail.com"];
+const isOwner = () => OWNER_EMAILS.includes((lsGet("fo_email") || "").toLowerCase());
+const myName = () => ((lsGet("fo_email") || "").split("@")[0] || "").slice(0, 20);
+const isAdmin = () => isOwner() && lsGet("fo_admin") === "1";
 function applyAdmin() { $("tab-clean").classList.toggle("hidden", !isAdmin()); }
 function setTabNow(t) {
   if (t === "clean" && !isAdmin()) t = "look";
@@ -1411,6 +1415,13 @@ $("tab-look").onclick = () => setTab("look");
 $("btn-help").onclick = () => openInfo("uitleg");
 $("btn-beheer").onclick = () => {
   const sh = $("sheet"); pushNav("sheet"); sh.className = "sheet-bg";
+  if (!isOwner()) {
+    sh.innerHTML = `<div class="sheet"><h3>Alleen kijken</h3>
+      <p class="muted" style="margin:8px 0 14px">Je bent ingelogd als <b>${esc(lsGet("fo_email") || "onbekend")}</b>. Met dit account kun je de foto's bekijken, maar niet markeren, verplaatsen of verwijderen.</p>
+      <button class="btn" id="sheet-cancel" style="width:100%">Sluiten</button></div>`;
+    $("sheet-cancel").onclick = closeSheet; sh.onclick = (e) => { if (e.target === sh) closeSheet(); };
+    return;
+  }
   sh.innerHTML = `<div class="sheet"><h3>Beheer</h3>
     <label class="opt" style="display:flex;gap:10px;align-items:center;margin:8px 0 14px"><input type="checkbox" id="adm-on" ${isAdmin() ? "checked" : ""}> <span>Opruimen tonen (foto's markeren als weg, verplaatsen, albums bewerken)</span></label>
     <button class="btn" id="sheet-cancel" style="width:100%">Sluiten</button></div>`;
