@@ -587,6 +587,23 @@ function showLoadBar(n, done) {
   if (!bar) { bar = document.createElement("div"); bar.id = "loadbar"; bar.className = "loadbar"; const c = $("content"); c.insertBefore(bar, c.firstChild); }
   bar.textContent = `⏳ Meer foto's laden… ${n} tot nu toe`;
 }
+// Chronologisch sorteren op opnametijd (eigenschap "ts", gezet door sync_previews.py). Foto's zonder tijd komen achteraan, op naam.
+// In een map: alles op tijd. In een jaar: per map op tijd (mappen blijven bij elkaar). In een album: alles op tijd.
+function sortChrono(items) {
+  const key = (f) => (f.properties && f.properties.ts) || "";
+  const byTime = (a, b) => {
+    const ka = key(a), kb = key(b);
+    if (ka && kb) return ka < kb ? -1 : ka > kb ? 1 : a.name.localeCompare(b.name, "nl", { numeric: true });
+    if (ka) return -1; if (kb) return 1;
+    return a.name.localeCompare(b.name, "nl", { numeric: true });
+  };
+  if (S.view === "year") {
+    const order = new Map(); items.forEach((f) => { const p = (f.parents || [])[0] || "?"; if (!order.has(p)) order.set(p, order.size); });
+    return items.slice().sort((a, b) => (order.get((a.parents || [])[0] || "?") - order.get((b.parents || [])[0] || "?")) || byTime(a, b));
+  }
+  return items.slice().sort(byTime);
+}
+
 async function loadItems(q, title, orderBy) {
   if (navTop() !== "list" && navTop() !== "yearfolder") pushNav("list");
   setHeader(title, true);
@@ -595,19 +612,19 @@ async function loadItems(q, title, orderBy) {
   const cached = itemCache.get(key);
   const alive = () => my === loadSeq && S.view === view && S.current === cur;
   let shown = false;
-  if (cached) { S.items = cached; renderItems(); shown = true; showLoadBar(cached.length); }
+  if (cached) { S.items = sortChrono(cached); renderItems(); shown = true; showLoadBar(cached.length); }
   else c.innerHTML = skeletonHtml();
   const keepScroll = (fn) => { const y = window.scrollY; fn(); window.scrollTo(0, y); };
   try {
     const items = await listAll(q, PHOTO_FIELDS, { orderBy, onPage: (part) => {
       if (!alive() || cached) return;                       // met cache wachten we met verversen tot alles binnen is
-      S.items = part;                                       // eerste pagina meteen tonen; de rest komt er vanzelf bij
+      S.items = sortChrono(part);                           // eerste pagina meteen tonen; de rest komt er vanzelf bij
       keepScroll(() => renderItems()); shown = true; showLoadBar(part.length);
     } });
     if (!alive()) { itemCache.set(key, items); return; }
     itemCache.set(key, items);
     if (itemCache.size > 8) itemCache.delete(itemCache.keys().next().value);
-    S.items = items;
+    S.items = sortChrono(items);
     keepScroll(() => renderItems());
     showLoadBar(0, true);
   } catch (e) { if (alive() && !shown) c.innerHTML = `<div class="card"><p class="muted">${esc(e.message)}</p></div>`; else showLoadBar(0, true); }
