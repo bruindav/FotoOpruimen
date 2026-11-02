@@ -125,7 +125,7 @@
 
   /* Viewer */
   #viewer { position: fixed; inset: 0; z-index: 50; background: #000; display: flex; flex-direction: column; touch-action: pan-y; }
-  #viewer .vtop { display: flex; align-items: center; gap: 10px; padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top)); background: rgba(0,0,0,.6); }
+  #viewer .vtop { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top)); background: rgba(0,0,0,.6); }
   #viewer .vtitle { flex: 1; min-width: 0; font-size: 14px; }
   #viewer .vtitle div:last-child { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #viewer .vimg { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; }
@@ -163,6 +163,8 @@
   .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 60; display: flex; align-items: flex-end; justify-content: center; }
   .sheet { background: var(--panel); width: 100%; max-width: 560px; max-height: 80vh; overflow: auto; border-radius: 16px 16px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
   .sheet h3 { margin: 0 0 10px; }
+  .inforow { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border, #333); font-size: 14px; }
+  .inforow span { color: var(--muted); flex: none; } .inforow b { font-weight: 500; text-align: right; word-break: break-all; }
   .loading { text-align: center; color: var(--muted); padding: 30px 0; }
 .castico{vertical-align:-3px}
 .loadbar { position: sticky; top: 0; z-index: 5; margin: 0 0 8px; padding: 6px 12px; font-size: 13px; color: #c9d1e3; background: #1c2230; border: 1px solid #2f3850; border-radius: 99px; text-align: center; animation: pulse 1.4s ease-in-out infinite; }
@@ -365,6 +367,27 @@ function toast(msg) {
 function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function showView(v) {
   for (const id of ["setup", "login", "app"]) $("view-" + id).classList.toggle("hidden", id !== v);
+}
+function showInfo(f) {
+  const p = f.properties || {}, im = f.imageMediaMetadata || {};
+  const fmtTs = (t) => t && t.length >= 8 ? `${t.slice(6, 8)}-${t.slice(4, 6)}-${t.slice(0, 4)}` + (t.length >= 12 ? ` ${t.slice(8, 10)}:${t.slice(10, 12)}` : "") : "";
+  const folder = (f.parents || []).map((x) => S.folderNames[x]).filter(Boolean)[0] || "";
+  const rows = [
+    ["Bestandsnaam", p.fn || cleanName(f.name)],
+    ["Map", folder],
+    ["Opnamedatum", fmtTs(p.ts)],
+    ["Jaar (map / foto)", [p.yr, p.ey].filter(Boolean).join(" / ")],
+    ["Camera", p.cam],
+    ["Originele afmeting", (p.dim || "").replace("x", " × ")],
+    ["Voorbeeld", im.width && im.height ? `${im.width} × ${im.height}` : ""],
+    ["Markering", [mark(f), p.by].filter(Boolean).join(" door ")],
+  ].filter((r) => r[1]);
+  let gps = "";
+  if (p.gps) gps = `<div class="inforow"><span>Locatie</span><a href="https://maps.google.com/?q=${encodeURIComponent(p.gps)}" target="_blank" rel="noopener">${esc(p.gps)} ↗</a></div>`;
+  const bg = document.createElement("div"); bg.className = "sheet-bg"; bg.id = "infosheet"; bg.style.zIndex = 80;
+  bg.innerHTML = `<div class="sheet"><h3>Foto-gegevens</h3>${rows.map((r) => `<div class="inforow"><span>${esc(r[0])}</span><b>${esc(r[1])}</b></div>`).join("")}${gps}${(p.cam || p.dim || p.fn) ? "" : '<p class="muted" style="font-size:13px">Meer gegevens (camera, afmeting, locatie) verschijnen na de volgende synchronisatie op de laptop.</p>'}<button class="btn" style="width:100%;margin-top:10px">Sluiten</button></div>`;
+  bg.onclick = (e) => { e.stopPropagation(); if (e.target === bg || e.target.tagName === "BUTTON") bg.remove(); };
+  ($("viewer") && $("viewer").classList.contains("show") || $("viewer").children.length ? $("viewer") : document.body).appendChild(bg);
 }
 function cleanName(n) { return (n || "").replace(/^\d+_/, "").replace(/\.jpg$/i, ""); }
 function thumbUrl(f, size) {
@@ -715,7 +738,8 @@ function dateMismatch(f) {      // opnamedatum (EXIF-jaar) wijkt af van het jaar
 }
 function makeTile(f, idx) {
   const w = f.imageMediaMetadata && f.imageMediaMetadata.width, h = f.imageMediaMetadata && f.imageMediaMetadata.height;
-  const ratio = w && h ? w / h : 1.33;
+  const rot = f.imageMediaMetadata && f.imageMediaMetadata.rotation;
+  const ratio = w && h ? ((rot === 1 || rot === 3) ? h / w : w / h) : 1.33;
   const t = document.createElement("div");
   t.className = "tile"; t.dataset.id = f.id;
   t.style.flexGrow = String(Math.round(ratio * 100));
@@ -729,6 +753,14 @@ function makeTile(f, idx) {
   const dm = dateMismatch(f);
   const img = document.createElement("img"); img.loading = "lazy"; img.alt = "";
   setImg(img, f, S.tileH > 150 ? 640 : 400); t.appendChild(img);
+  img.addEventListener("load", () => {            // geen/afwijkende metadata van Drive: verhouding uit de echte afbeelding
+    const nw = img.naturalWidth, nh = img.naturalHeight; if (!nw || !nh) return;
+    const r2 = nw / nh;
+    if (Math.abs(r2 - ratio) / ratio > 0.03) {
+      t.style.flexGrow = String(Math.round(r2 * 100));
+      t.style.flexBasis = Math.round(r2 * S.tileH) + "px";
+    }
+  });
   t.insertAdjacentHTML("beforeend", (m ? `<span class="badge" title="${esc((f.properties && f.properties.by) ? "gemarkeerd door " + f.properties.by : "")}">${m === "weg" ? "🗑 weg" : "✓"}${(f.properties && f.properties.by && S.tileH > 150) ? " · " + esc(f.properties.by) : ""}</span>` : mv ? `<span class="badge">→ ${esc(S.folderNames[mv] || "map")}</span>` : "") + (isFav(f) ? '<span class="favflag">♥</span>' : "") + (dm ? `<span class="dmflag" title="Datum in de foto wijkt af van de map">⚠ camera ${dm.ey}</span>` : "") + '<span class="check">✓</span>');
   t.onclick = () => {
     if (S.selecting) toggleSelect(f.id, t);
@@ -927,7 +959,7 @@ function renderViewer() {
   const album = S.view === "album";
   const v = $("viewer");
   v.innerHTML = `
-    <div class="vtop"><button class="btn small" id="v-close">✕</button><button class="btn small" id="v-show" title="Diavoorstelling">▶</button>${castAppId() ? '<button class="btn small" id="v-cast" title="Naar tv"><svg class="castico" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M21 3H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11z"/></svg></button>' : ""}<button class="btn small" id="v-lens" title="Wat is dit? Zoek deze foto met Google Lens (gebouw, kerk, stad…)">🔍</button><button class="btn small ${isFav(f) ? "favon" : ""}" id="v-fav" title="Beste foto">${isFav(f) ? "♥" : "♡"}</button>
+    <div class="vtop"><button class="btn small" id="v-close">✕</button><button class="btn small" id="v-show" title="Diavoorstelling">▶</button>${castAppId() ? '<button class="btn small" id="v-cast" title="Naar tv"><svg class="castico" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M21 3H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11z"/></svg></button>' : ""}<button class="btn small" id="v-lens" title="Wat is dit? Zoek deze foto met Google Lens (gebouw, kerk, stad…)">🔍</button><button class="btn small" id="v-info" title="Gegevens van deze foto">ℹ</button><button class="btn small ${isFav(f) ? "favon" : ""}" id="v-fav" title="Beste foto">${isFav(f) ? "♥" : "♡"}</button>
       <span class="showonly"><button class="btn small" id="v-speed" title="Snelheid">⏱ ${showCfg.sec}s</button><button class="btn small ${showCfg.shuffle ? "favon" : ""}" id="v-shuf" title="Willekeurige volgorde">🔀</button><button class="btn small" id="v-fit" title="Beeld vullen of hele foto tonen">${showCfg.fit === "cover" ? "⤡ vullen" : "⤢ passen"}</button></span>
       <div class="vtitle"><div>${esc(cleanName(f.name))}</div><div>${esc(folder)} · ${vIndex + 1}/${vList.length}</div>${dateMismatch(f) ? `<div style="color:#ffd27a">⚠ datum in foto: ${dateMismatch(f).ey}, map: ${dateMismatch(f).yr}</div>` : ""}</div></div>
     <div class="vimg ${m}" id="v-img">
@@ -945,6 +977,7 @@ function renderViewer() {
   $("v-show").onclick = () => startShow();
   if ($("v-cast")) $("v-cast").onclick = () => startCast(vList, vIndex);
   $("v-lens").onclick = () => lensSearch(vList[vIndex]);
+  $("v-info").onclick = () => showInfo(vList[vIndex]);
 
   $("v-fav").onclick = async () => { await setProps([f], { fav: isFav(f) ? null : "1" }); renderViewer(); };
   $("v-speed").onclick = () => { const o = [3, 6, 10, 20]; showCfg.sec = o[(o.indexOf(showCfg.sec) + 1) % o.length]; lsSet("fo_show_sec", String(showCfg.sec)); $("v-speed").textContent = `⏱ ${showCfg.sec}s`; if (showTimer) restartShowTimer(); };
