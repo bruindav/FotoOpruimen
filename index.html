@@ -85,10 +85,10 @@
   .yearchip { min-width: 78px; min-height: 46px; padding: 0 14px; font-size: 18px; font-weight: 700; color: var(--text); background: var(--bg); border: 1px solid var(--line, #2c3345); border-radius: 12px; cursor: pointer; }
   .yearchip:active { background: var(--accent, #e8a74a); color: #111; }
   :root { --th: 130px; }
-  .grid { display: flex; flex-wrap: wrap; gap: 3px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 3px; align-items: flex-start; }
   .grid::after { content: ""; flex-grow: 1000; }
-  .tile { position: relative; height: var(--th); background: var(--panel); border-radius: 6px; overflow: hidden; cursor: pointer; }
-  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tile { position: relative; height: auto; background: var(--panel); border-radius: 6px; overflow: hidden; cursor: pointer; }
+  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; position: absolute; inset: 0; }
   .tile.weg img { opacity: .35; }
   .tile.weg { outline: 3px solid var(--danger); outline-offset: -3px; }
   .tile.houd { outline: 3px solid var(--ok); outline-offset: -3px; }
@@ -744,7 +744,8 @@ function makeTile(f, idx) {
   t.className = "tile"; t.dataset.id = f.id;
   t.style.flexGrow = String(Math.round(ratio * 100));
   t.style.flexBasis = Math.round(ratio * S.tileH) + "px";
-  t.style.maxWidth = "100%";
+  t.style.aspectRatio = String(ratio);              // hoogte volgt de breedte: geen uitsnede meer
+  t.style.maxWidth = `min(100%, ${Math.round(ratio * S.tileH * 1.8)}px)`;
   const m = S.look ? "" : mark(f);
   const mv = S.look ? "" : (f.properties && f.properties.mv);
   if (m) t.classList.add(m);
@@ -759,6 +760,8 @@ function makeTile(f, idx) {
     if (Math.abs(r2 - ratio) / ratio > 0.03) {
       t.style.flexGrow = String(Math.round(r2 * 100));
       t.style.flexBasis = Math.round(r2 * S.tileH) + "px";
+      t.style.aspectRatio = String(r2);
+      t.style.maxWidth = `min(100%, ${Math.round(r2 * S.tileH * 1.8)}px)`;
     }
   });
   t.insertAdjacentHTML("beforeend", (m ? `<span class="badge" title="${esc((f.properties && f.properties.by) ? "gemarkeerd door " + f.properties.by : "")}">${m === "weg" ? "🗑 weg" : "✓"}${(f.properties && f.properties.by && S.tileH > 150) ? " · " + esc(f.properties.by) : ""}</span>` : mv ? `<span class="badge">→ ${esc(S.folderNames[mv] || "map")}</span>` : "") + (isFav(f) ? '<span class="favflag">♥</span>' : "") + (dm ? `<span class="dmflag" title="Datum in de foto wijkt af van de map">⚠ camera ${dm.ey}</span>` : "") + '<span class="check">✓</span>');
