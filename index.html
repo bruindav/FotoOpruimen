@@ -35,7 +35,7 @@
   .tab { flex: 1; padding: 12px 8px; background: none; border: 0; border-bottom: 3px solid transparent; color: var(--muted); font-weight: 600; }
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-  main { padding: 16px; max-width: 1100px; margin: 0 auto; }
+  main { padding: 16px 6px; max-width: 1100px; margin: 0 auto; }
   .btn {
     background: var(--panel2); border: 1px solid var(--border); border-radius: var(--radius);
     padding: 12px 16px; min-height: 46px; cursor: pointer; font-weight: 600;
@@ -86,8 +86,7 @@
   .yearchip:active { background: var(--accent, #e8a74a); color: #111; }
   :root { --th: 130px; }
   .grid { display: flex; flex-wrap: wrap; gap: 3px; align-items: flex-start; }
-  .grid::after { content: ""; flex-grow: 1000; }
-  .tile { position: relative; height: auto; background: var(--panel); border-radius: 6px; overflow: hidden; cursor: pointer; }
+  .tile { position: relative; flex: none; background: var(--panel); border-radius: 6px; overflow: hidden; cursor: pointer; }
   .tile img { width: 100%; height: 100%; object-fit: cover; display: block; position: absolute; inset: 0; }
   .tile.weg img { opacity: .35; }
   .tile.weg { outline: 3px solid var(--danger); outline-offset: -3px; }
@@ -717,6 +716,7 @@ function renderItems() {
   const grid = $("grid"); const vis = visibleItems();
   if (!vis.length) grid.innerHTML = '<div class="muted" style="padding:20px 0">Niets te tonen.</div>';
   vis.forEach((f, idx) => grid.appendChild(makeTile(f, idx)));
+  layoutGrid();
   updateBulk();
   maybeFollowCast();
 }
@@ -736,16 +736,48 @@ function dateMismatch(f) {      // opnamedatum (EXIF-jaar) wijkt af van het jaar
   const pr = f.properties || {};
   return pr.ey && pr.yr && pr.ey !== pr.yr ? { ey: pr.ey, yr: pr.yr } : null;
 }
+// Overzicht zoals Google Foto's: elke rij loopt van rand tot rand, staande en liggende foto's krijgen dezelfde hoogte
+let layoutQueued = false;
+function scheduleLayout() { if (layoutQueued) return; layoutQueued = true; requestAnimationFrame(() => { layoutQueued = false; layoutGrid(); }); }
+function layoutGrid() {
+  const grid = $("grid"); if (!grid) return;
+  const tiles = [...grid.querySelectorAll(".tile")]; if (!tiles.length) return;
+  const W = grid.clientWidth; if (!W) return;
+  const gap = 3, T = S.tileH * 1.3;
+  let row = [], sum = 0;
+  const place = (items, h) => items.forEach((t) => {
+    const r = Number(t.dataset.ratio) || 1.33;
+    t.style.width = Math.floor(r * h) + "px"; t.style.height = Math.round(h) + "px";
+  });
+  const flush = (last) => {
+    if (!row.length) return;
+    const avail = W - gap * (row.length - 1);
+    let h = avail / sum;
+    if (last && h > T) h = T;                // laatste rij niet opblazen
+    place(row, h); row = []; sum = 0;
+  };
+  for (const t of tiles) {
+    const r = Number(t.dataset.ratio) || 1.33;
+    if (row.length) {
+      const withIt = (W - gap * row.length) / (sum + r), without = (W - gap * (row.length - 1)) / sum;
+      if ((sum + r) * T + gap * row.length >= W) {          // deze rij is vol: met of zonder deze foto, wat het dichtst bij de streefhoogte komt
+        if (Math.abs(withIt - T) < Math.abs(without - T)) { row.push(t); sum += r; flush(false); continue; }
+        flush(false);
+      }
+    }
+    row.push(t); sum += r;
+    if (sum * T + gap * (row.length - 1) >= W && row.length === 1) { flush(false); }
+  }
+  flush(true);
+}
+window.addEventListener("resize", () => scheduleLayout());
 function makeTile(f, idx) {
   const w = f.imageMediaMetadata && f.imageMediaMetadata.width, h = f.imageMediaMetadata && f.imageMediaMetadata.height;
   const rot = f.imageMediaMetadata && f.imageMediaMetadata.rotation;
   const ratio = w && h ? ((rot === 1 || rot === 3) ? h / w : w / h) : 1.33;
   const t = document.createElement("div");
   t.className = "tile"; t.dataset.id = f.id;
-  t.style.flexGrow = String(Math.round(ratio * 100));
-  t.style.flexBasis = Math.round(ratio * S.tileH) + "px";
-  t.style.aspectRatio = String(ratio);              // hoogte volgt de breedte: geen uitsnede meer
-  t.style.maxWidth = `min(100%, ${Math.round(ratio * S.tileH * 1.8)}px)`;
+  t.dataset.ratio = String(ratio);
   const m = S.look ? "" : mark(f);
   const mv = S.look ? "" : (f.properties && f.properties.mv);
   if (m) t.classList.add(m);
@@ -756,13 +788,8 @@ function makeTile(f, idx) {
   setImg(img, f, S.tileH > 150 ? 640 : 400); t.appendChild(img);
   img.addEventListener("load", () => {            // geen/afwijkende metadata van Drive: verhouding uit de echte afbeelding
     const nw = img.naturalWidth, nh = img.naturalHeight; if (!nw || !nh) return;
-    const r2 = nw / nh;
-    if (Math.abs(r2 - ratio) / ratio > 0.03) {
-      t.style.flexGrow = String(Math.round(r2 * 100));
-      t.style.flexBasis = Math.round(r2 * S.tileH) + "px";
-      t.style.aspectRatio = String(r2);
-      t.style.maxWidth = `min(100%, ${Math.round(r2 * S.tileH * 1.8)}px)`;
-    }
+    const r2 = nw / nh, r1 = Number(t.dataset.ratio);
+    if (Math.abs(r2 - r1) / r1 > 0.03) { t.dataset.ratio = String(r2); scheduleLayout(); }
   });
   t.insertAdjacentHTML("beforeend", (m ? `<span class="badge" title="${esc((f.properties && f.properties.by) ? "gemarkeerd door " + f.properties.by : "")}">${m === "weg" ? "🗑 weg" : "✓"}${(f.properties && f.properties.by && S.tileH > 150) ? " · " + esc(f.properties.by) : ""}</span>` : mv ? `<span class="badge">→ ${esc(S.folderNames[mv] || "map")}</span>` : "") + (isFav(f) ? '<span class="favflag">♥</span>' : "") + (dm ? `<span class="dmflag" title="Datum in de foto wijkt af van de map">⚠ camera ${dm.ey}</span>` : "") + '<span class="check">✓</span>');
   t.onclick = () => {
