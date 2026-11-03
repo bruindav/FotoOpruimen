@@ -676,6 +676,7 @@ function renderYearFolders() {
     .sort((a, b) => a.name.localeCompare(b.name, "nl", { numeric: true }));
   c.innerHTML = `<div class="card" style="padding:12px"><h2 style="margin-left:4px">Mappen in ${esc(S.current.year)} (${S.items.length} foto's)</h2>
     <p class="muted" style="margin:0 4px 10px">Foto's staan hier op de <b>opnamedatum uit de foto zelf</b>. Een map uit een ander jaar bevat dus foto's met een afwijkende camera-datum (bijv. klok niet goed gezet, of reis rond de jaarwisseling).</p>
+    ${S.look ? "" : `<button class="btn small" id="yf-new" style="margin:0 0 10px">➕ Nieuwe map in ${esc(S.current.year)}</button>`}
     <input type="text" id="yf-search" placeholder="Zoek map…" style="margin-bottom:10px">
     <div class="list" id="yf-list"></div></div><div class="spacer"></div>`;
   const draw = () => {
@@ -691,6 +692,7 @@ function renderYearFolders() {
       list.appendChild(b);
     });
   };
+  if ($("yf-new")) $("yf-new").onclick = async () => { const f = await createFolderDialog(S.current.year + " / "); if (f) { S.counts = S.counts || {}; toast(`"${f.name}" staat klaar; verplaats foto's ernaartoe met 📁`); } };
   $("yf-search").oninput = draw; draw();
 }
 
@@ -849,9 +851,14 @@ function pickFolder(title, excludeId, onPick, initialQuery) {
   sh.innerHTML = `<div class="sheet"><h3>${esc(title)}</h3>
     <input type="text" id="pick-search" placeholder="Zoek map…" style="margin-bottom:6px">
     <div class="muted" id="pick-hint" style="font-size:12px;margin-bottom:8px"></div>
+    ${S.look ? "" : '<button class="btn" id="pick-new" style="width:100%;margin-bottom:8px">➕ Nieuwe map…</button>'}
     <div class="list" id="pick-list"></div>
     <button class="btn" id="sheet-cancel" style="width:100%;margin-top:12px">Annuleren</button></div>`;
   $("sheet-cancel").onclick = closeSheet;
+  if ($("pick-new")) $("pick-new").onclick = async () => {
+    const f = await createFolderDialog(newFolderPrefill());
+    if (f) { closeSheet(); onPick(f); }
+  };
   sh.onclick = (e) => { if (e.target === sh) closeSheet(); };
   const draw = () => {
     const q = $("pick-search").value.toLowerCase();
@@ -883,22 +890,99 @@ async function moveFilesDialog(files, afterDone) {
   }, yearQuery);
 }
 
+
+// ------------------------------------------------------------------ nieuwe map / hernoemen
+function askText(title, hint, value) {
+  return new Promise((resolve) => {
+    const bg = document.createElement("div"); bg.className = "sheet-bg"; bg.id = "asksheet"; bg.style.zIndex = 90;
+    bg.innerHTML = `<div class="sheet"><h3>${esc(title)}</h3><p class="muted" style="font-size:13px;margin:0 0 8px">${hint}</p>
+      <input type="text" id="ask-input" autocomplete="off"><div style="display:flex;gap:8px;margin-top:12px"><button class="btn" id="ask-no" style="flex:1">Annuleren</button><button class="btn ok" id="ask-ok" style="flex:1">OK</button></div></div>`;
+    document.body.appendChild(bg);
+    const inp = bg.querySelector("#ask-input"); inp.value = value || "";
+    const done = (v) => { bg.remove(); resolve(v); };
+    bg.querySelector("#ask-no").onclick = () => done(null);
+    bg.querySelector("#ask-ok").onclick = () => done(inp.value.trim());
+    inp.onkeydown = (e) => { if (e.key === "Enter") done(inp.value.trim()); };
+    bg.onclick = (e) => { if (e.target === bg) done(null); };
+    setTimeout(() => { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }, 50);
+  });
+}
+function cleanFolderPath(txt) {            // "2024 / Vakantie" ; null bij ongeldige naam
+  const segs = (txt || "").split("/").map((x) => x.trim());
+  if (!segs.length || segs.some((x) => !x || x === "." || x === ".." || /[\\:*?"<>|]/.test(x))) return null;
+  return segs.join(" / ");
+}
+async function createFolderDialog(prefill) {
+  const txt = await askText("Nieuwe map", "Geef het volledige pad, met <b>/</b> tussen de niveaus (bijv. <b>2024 / Zomerkamp</b>). De map wordt bij de volgende synchronisatie ook op de laptop aangemaakt.", prefill);
+  if (txt === null) return null;
+  const name = cleanFolderPath(txt);
+  if (!name) { toast("Ongeldige naam (leeg niveau of tekens zoals : * ? \" < > |)"); return null; }
+  const exist = S.folders.find((f) => f.name.toLowerCase() === name.toLowerCase());
+  if (exist) { toast("Deze map bestaat al"); return exist; }
+  try {
+    const root = await findPreviewRoot();
+    const r = await gapi("/files", { method: "POST", params: { fields: "id,name,properties" }, body: { name, mimeType: FOLDER, parents: [root], properties: { fa_folder: "1", newf: "1" } } });
+    const f = { id: r.id, name: r.name || name, properties: r.properties || { fa_folder: "1", newf: "1" } };
+    S.folders.push(f); S.folderNames[f.id] = f.name;
+    S.folders.sort((a, b) => a.name.localeCompare(b.name, "nl", { numeric: true }));
+    toast(`Map "${name}" aangemaakt (komt op de laptop bij synchroniseren)`);
+    return f;
+  } catch (e) { toast("Aanmaken mislukt: " + e.message.slice(0, 80)); return null; }
+}
+function newFolderPrefill() {
+  if (S.view === "year" && S.current && S.current.year) return S.current.year + " / ";
+  if (S.view === "folder" && S.current) return (S.folderNames[S.current.id] || "") + " / ";
+  return "";
+}
+
 // ------------------------------------------------------------------ map samenvoegen
 function currentFolderObj() { return S.folders.find((f) => f.id === (S.current && S.current.id)); }
+
+function renameBarHtml() {
+  const f = currentFolderObj(); if (!f || S.look) return "";
+  const rn = f.properties && f.properties.rename_to;
+  if (rn) return `<div class="mergebar"><div class="txt">✏️ Gevraagd: hernoemen naar <b>${esc(rn)}</b>. Wordt bij "Wijzigingen van telefoon verwerken" op de laptop doorgevoerd.</div><button class="btn small" id="rename-cancel">Annuleren</button></div>`;
+  return `<div class="mergebar"><div class="txt">Map hernoemen of een submap maken?</div><span style="display:flex;gap:6px"><button class="btn small" id="rename-start">✏️ Hernoemen…</button><button class="btn small" id="sub-new">➕ Submap</button></span></div>`;
+}
+function wireRenameBar() {
+  const f = currentFolderObj(); if (!f) return;
+  const st = $("rename-start"), ca = $("rename-cancel"), sub = $("sub-new");
+  if (sub) sub.onclick = async () => { const n = await createFolderDialog(f.name + " / "); if (n) { S.counts = S.counts || {}; renderItems(); } };
+  if (st) st.onclick = async () => {
+    const parts = f.name.split(" / "); const last = parts.pop();
+    const txt = await askText("Map hernoemen", `Nieuwe naam voor <b>${esc(last)}</b>${parts.length ? ` (in ${esc(parts.join(" / "))})` : ""}. Submappen en foto's gaan mee.`, last);
+    if (txt === null || txt === last) return;
+    if (/[\/\\:*?"<>|]/.test(txt) || !txt) { toast("Ongeldige naam (geen / \\ : * ? \" < > |)"); return; }
+    const full = parts.concat([txt]).join(" / ");
+    if (S.folders.some((x) => x.name.toLowerCase() === full.toLowerCase() && x.id !== f.id)) { toast("Er bestaat al een map met die naam (gebruik samenvoegen)"); return; }
+    try {
+      await gapi("/files/" + f.id, { method: "PATCH", params: { fields: "id" }, body: { properties: { rename_to: full } } });
+      f.properties = Object.assign({}, f.properties, { rename_to: full });
+      toast(`Verzoek gedaan: hernoemen naar "${txt}" (op laptop bij verwerken)`); renderItems();
+    } catch (e) { toast("Mislukt: " + e.message.slice(0, 80)); }
+  };
+  if (ca) ca.onclick = async () => {
+    try {
+      await gapi("/files/" + f.id, { method: "PATCH", params: { fields: "id" }, body: { properties: { rename_to: null } } });
+      const p = Object.assign({}, f.properties); delete p.rename_to; f.properties = p; renderItems();
+    } catch (e) { toast("Mislukt: " + e.message.slice(0, 80)); }
+  };
+}
 
 function mergeBarHtml() {
   if (S.view !== "folder") return "";
   const f = currentFolderObj(); if (!f) return "";
   const tgt = f.properties && f.properties.merge_into;
   if (tgt) {
-    return `<div class="mergebar"><div class="txt">🔀 Gevraagd: samenvoegen met <b>${esc(S.folderNames[tgt] || "?")}</b>. Dit wordt pas uitgevoerd na jouw controle op de laptop.</div>
+    return renameBarHtml() + `<div class="mergebar"><div class="txt">🔀 Gevraagd: samenvoegen met <b>${esc(S.folderNames[tgt] || "?")}</b>. Dit wordt pas uitgevoerd na jouw controle op de laptop.</div>
       <button class="btn small" id="merge-cancel">Annuleren</button></div>`;
   }
-  return `<div class="mergebar"><div class="txt">Deze map samenvoegen met een andere map?</div>
+  return renameBarHtml() + `<div class="mergebar"><div class="txt">Deze map samenvoegen met een andere map?</div>
     <button class="btn small" id="merge-start">🔀 Samenvoegen…</button></div>`;
 }
 
 function wireMergeBar() {
+  wireRenameBar();
   const f = currentFolderObj(); if (!f) return;
   const start = $("merge-start"), cancel = $("merge-cancel");
   if (start) start.onclick = () => pickFolder(`Voeg "${f.name}" samen met…`, f.id, async (target) => {
