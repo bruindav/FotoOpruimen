@@ -804,7 +804,7 @@ function makeTile(f, idx) {
 function setHeader(title, back) {
   $("title").textContent = title;
   $("btn-back").classList.toggle("hidden", !back);
-  $("btn-select").classList.toggle("hidden", S.look || !(S.view === "folder" || S.view === "year" || S.view === "album"));
+  $("btn-select").classList.toggle("hidden", (S.look && !isOwner()) || !(S.view === "folder" || S.view === "year" || S.view === "album"));
 }
 
 // ------------------------------------------------------------------ markeren
@@ -1003,8 +1003,16 @@ function wireMergeBar() {
 }
 
 // ------------------------------------------------------------------ selecteren
-function exitSelect() { S.selecting = false; S.selected = new Set(); $("btn-select").textContent = "Selecteren"; updateBulk(); }
+function exitSelect() { S.selecting = false; S.rangeMode = false; S.lastSel = null; S.selected = new Set(); $("btn-select").textContent = "Selecteren"; updateBulk(); }
 function toggleSelect(id, tile) {
+  if (S.rangeMode && S.lastSel && S.lastSel !== id) {          // bereik: alles tussen de vorige en deze foto aanvinken
+    const vis = visibleItems(), a = vis.findIndex((f) => f.id === S.lastSel), b = vis.findIndex((f) => f.id === id);
+    if (a >= 0 && b >= 0) {
+      vis.slice(Math.min(a, b), Math.max(a, b) + 1).forEach((f) => S.selected.add(f.id));
+      S.rangeMode = false; S.lastSel = id; { const y = window.scrollY; renderItems(); window.scrollTo(0, y); } toast(`${S.selected.size} geselecteerd`); return;
+    }
+  }
+  S.rangeMode = false; S.lastSel = id;
   if (S.selected.has(id)) S.selected.delete(id); else S.selected.add(id);
   tile.classList.toggle("selected", S.selected.has(id));
   updateBulk();
@@ -1027,14 +1035,24 @@ function updateBulk() {
     $("bk-move").onclick = () => pickAlbum("move");
     $("bk-add").onclick = () => pickAlbum("add");
     $("bk-rm").onclick = removeFromAlbum;
+  } else if (S.look) {
+    b.innerHTML = `<div class="info">${n} geselecteerd</div>
+      <button class="btn" id="bk-all">Alles</button>
+      <button class="btn ${S.rangeMode ? "favon" : ""}" id="bk-range" title="Tik eerst de eerste foto, dan deze knop, dan de laatste foto">↔ Bereik</button>
+      <button class="btn primary" id="bk-mv" ${n ? "" : "disabled"}>📁 Verplaats…</button>`;
+    $("bk-all").onclick = selectAllVisible;
+    $("bk-range").onclick = () => { if (!S.lastSel) { toast("Tik eerst de eerste foto van het bereik"); return; } S.rangeMode = !S.rangeMode; toast(S.rangeMode ? "Tik nu de laatste foto van het bereik" : "Bereik uit"); updateBulk(); };
+    $("bk-mv").onclick = () => moveFilesDialog(selectedFiles(), () => { S.selected = new Set(); exitSelect(); renderItems(); });
   } else {
     b.innerHTML = `<div class="info">${n} geselecteerd</div>
+      <button class="btn" id="bk-range" title="Tik eerst de eerste foto, dan deze knop, dan de laatste foto">↔ Bereik</button>
       <button class="btn" id="bk-all">Alles</button>
       <button class="btn danger" id="bk-weg" ${n ? "" : "disabled"}>🗑 Weg</button>
       <button class="btn" id="bk-mv" ${n ? "" : "disabled"}>📁 Verplaats…</button>
       <button class="btn ok" id="bk-houd" ${n ? "" : "disabled"}>✓ Houden</button>
       <button class="btn" id="bk-clear" ${n ? "" : "disabled"}>Wis</button>`;
     $("bk-all").onclick = selectAllVisible;
+    $("bk-range").onclick = () => { if (!S.lastSel) { toast("Tik eerst de eerste foto van het bereik"); return; } S.rangeMode = !S.rangeMode; toast(S.rangeMode ? "Tik nu de laatste foto van het bereik" : "Bereik uit"); updateBulk(); };
     const act = (v) => async () => {
       const files = selectedFiles(); if (!files.length) return;
       await setMarks(files, v); S.selected = new Set(); renderItems();
