@@ -86,7 +86,7 @@
   .yearchip:active { background: var(--accent, #e8a74a); color: #111; }
   :root { --th: 130px; }
   .grid { display: flex; flex-wrap: wrap; gap: 3px; align-items: flex-start; }
-  .tile { position: relative; flex: none; background: var(--panel); border-radius: 6px; overflow: hidden; cursor: pointer; }
+  .tile { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; position: relative; flex: none; background: var(--panel); border-radius: 6px; overflow: hidden; cursor: pointer; }
   .tile img { width: 100%; height: 100%; object-fit: cover; display: block; position: absolute; inset: 0; }
   .tile.weg img { opacity: .35; }
   .tile.weg { outline: 3px solid var(--danger); outline-offset: -3px; }
@@ -794,7 +794,22 @@ function makeTile(f, idx) {
     if (Math.abs(r2 - r1) / r1 > 0.03) { t.dataset.ratio = String(r2); scheduleLayout(); }
   });
   t.insertAdjacentHTML("beforeend", (m ? `<span class="badge" title="${esc((f.properties && f.properties.by) ? "gemarkeerd door " + f.properties.by : "")}">${m === "weg" ? "🗑 weg" : "✓"}${(f.properties && f.properties.by && S.tileH > 150) ? " · " + esc(f.properties.by) : ""}</span>` : mv ? `<span class="badge">→ ${esc(S.folderNames[mv] || "map")}</span>` : "") + (isFav(f) ? '<span class="favflag">♥</span>' : "") + (dm ? `<span class="dmflag" title="Datum in de foto wijkt af van de map">⚠ camera ${dm.ey}</span>` : "") + '<span class="check">✓</span>');
+  let lp = null, lpFired = false, lx = 0, ly = 0;      // lang indrukken = selecteren starten (zoals in Google Foto's)
+  const lpStop = () => { if (lp) { clearTimeout(lp); lp = null; } };
+  t.addEventListener("pointerdown", (e) => {
+    lpFired = false; if (S.selecting || !canSelect()) return;
+    lx = e.clientX; ly = e.clientY; lpStop();
+    lp = setTimeout(() => {
+      lp = null; lpFired = true; startSelect();
+      const nt = document.querySelector(`.tile[data-id="${f.id}"]`); toggleSelect(f.id, nt || t);
+      if (navigator.vibrate) try { navigator.vibrate(15); } catch (e2) {}
+    }, 480);
+  });
+  t.addEventListener("pointermove", (e) => { if (lp && Math.hypot(e.clientX - lx, e.clientY - ly) > 8) lpStop(); });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => t.addEventListener(ev, lpStop));
+  t.addEventListener("contextmenu", (e) => { if (canSelect()) e.preventDefault(); });
   t.onclick = () => {
+    if (lpFired) { lpFired = false; return; }
     if (S.selecting) toggleSelect(f.id, t);
     else openViewer(idx);
   };
@@ -1618,11 +1633,15 @@ $("btn-beheer").onclick = () => {
 $("tab-clean").onclick = () => setTab("clean");
 $("tab-albums").onclick = () => setTab("albums");
 $("btn-back").onclick = () => { if (navTop() === "list" || navTop() === "yearfolder") goBack(); else setTab(S.tab); };
-$("btn-select").onclick = () => {
-  if (S.selecting) { if (navTop() === "select") goBack(); else { exitSelect(); renderItems(); } return; }
-  S.selecting = true; S.selected = new Set(); pushNav("select");
+function canSelect() { return (S.view === "folder" || S.view === "year" || S.view === "album") && (!S.look || isOwner()); }
+function startSelect() {
+  S.selecting = true; S.selected = new Set(); S.lastSel = null; S.rangeMode = false; pushNav("select");
   $("btn-select").textContent = "Klaar";
   renderItems();
+}
+$("btn-select").onclick = () => {
+  if (S.selecting) { if (navTop() === "select") goBack(); else { exitSelect(); renderItems(); } return; }
+  startSelect();
 };
 $("btn-logout").onclick = () => {
   try { if (token && window.google) google.accounts.oauth2.revoke(token, () => {}); } catch (e) {}
