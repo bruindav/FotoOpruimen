@@ -452,6 +452,7 @@ function mark(f) { return (f.properties && f.properties.mark) || ""; }
 let navStack = [], pendingFn = null, lastExit = 0, histReady = false;
 const navTop = () => navStack[navStack.length - 1];
 function pushNav(kind) { navStack.push(kind); try { history.pushState({ k: kind }, ""); } catch (e) {} }
+function rerenderKeep() { const y = window.scrollY; renderItems(); window.scrollTo(0, y); }
 function goBack() { try { history.back(); } catch (e) {} }
 function unwindThen(fn) {            // alle schermen erbovenop weg, dan fn()
   if (!navStack.length) return fn();
@@ -474,7 +475,7 @@ window.addEventListener("popstate", () => {
   const kind = navStack.pop();
   if (kind === "viewer") hideViewer();
   else if (kind === "sheet") hideSheet();
-  else if (kind === "select") { exitSelect(); if (S.items.length) renderItems(); }
+  else if (kind === "select") { exitSelect(); if (S.items.length) rerenderKeep(); }
   else if (kind === "yearfolder") { exitSelect(); S.yearFolder = null; renderItems(); }
   else if (kind === "list") { exitSelect(); S.tab === "albums" ? renderAlbumsHome() : renderCleanHome(); }
 });
@@ -1024,7 +1025,7 @@ function toggleSelect(id, tile) {
     const vis = visibleItems(), a = vis.findIndex((f) => f.id === S.lastSel), b = vis.findIndex((f) => f.id === id);
     if (a >= 0 && b >= 0) {
       vis.slice(Math.min(a, b), Math.max(a, b) + 1).forEach((f) => S.selected.add(f.id));
-      S.rangeMode = false; S.lastSel = id; { const y = window.scrollY; renderItems(); window.scrollTo(0, y); } toast(`${S.selected.size} geselecteerd`); return;
+      S.rangeMode = false; S.lastSel = id; rerenderKeep(); toast(`${S.selected.size} geselecteerd`); return;
     }
   }
   S.rangeMode = false; S.lastSel = id;
@@ -1057,7 +1058,7 @@ function updateBulk() {
       <button class="btn primary" id="bk-mv" ${n ? "" : "disabled"}>📁 Verplaats…</button>`;
     $("bk-all").onclick = selectAllVisible;
     $("bk-range").onclick = () => { if (!S.lastSel) { toast("Tik eerst de eerste foto van het bereik"); return; } S.rangeMode = !S.rangeMode; toast(S.rangeMode ? "Tik nu de laatste foto van het bereik" : "Bereik uit"); updateBulk(); };
-    $("bk-mv").onclick = () => moveFilesDialog(selectedFiles(), () => { S.selected = new Set(); exitSelect(); renderItems(); });
+    $("bk-mv").onclick = () => moveFilesDialog(selectedFiles(), () => { S.selected = new Set(); exitSelect(); rerenderKeep(); });
   } else {
     b.innerHTML = `<div class="info">${n} geselecteerd</div>
       <button class="btn" id="bk-range" title="Tik eerst de eerste foto, dan deze knop, dan de laatste foto">↔ Bereik</button>
@@ -1070,10 +1071,10 @@ function updateBulk() {
     $("bk-range").onclick = () => { if (!S.lastSel) { toast("Tik eerst de eerste foto van het bereik"); return; } S.rangeMode = !S.rangeMode; toast(S.rangeMode ? "Tik nu de laatste foto van het bereik" : "Bereik uit"); updateBulk(); };
     const act = (v) => async () => {
       const files = selectedFiles(); if (!files.length) return;
-      await setMarks(files, v); S.selected = new Set(); renderItems();
+      await setMarks(files, v); S.selected = new Set(); rerenderKeep();
       toast(v === "weg" ? `${files.length} gemarkeerd als weg` : v === "houd" ? `${files.length} behouden` : "Markering gewist");
     };
-    $("bk-mv").onclick = () => moveFilesDialog(selectedFiles(), () => { S.selected = new Set(); renderItems(); });
+    $("bk-mv").onclick = () => moveFilesDialog(selectedFiles(), () => { S.selected = new Set(); rerenderKeep(); });
     $("bk-weg").onclick = act("weg"); $("bk-houd").onclick = act("houd"); $("bk-clear").onclick = act("");
   }
 }
@@ -1081,7 +1082,7 @@ function selectAllVisible() {
   const vis = visibleItems();
   const all = vis.every((f) => S.selected.has(f.id));
   vis.forEach((f) => all ? S.selected.delete(f.id) : S.selected.add(f.id));
-  renderItems();
+  rerenderKeep();
 }
 
 // ------------------------------------------------------------------ viewer
@@ -1637,10 +1638,12 @@ function canSelect() { return (S.view === "folder" || S.view === "year" || S.vie
 function startSelect() {
   S.selecting = true; S.selected = new Set(); S.lastSel = null; S.rangeMode = false; pushNav("select");
   $("btn-select").textContent = "Klaar";
-  renderItems();
+  const g = $("grid");
+  if (g) { g.classList.add("selecting"); updateBulk(); }      // geen volledige herbouw: je blijft waar je bent in een lange map
+  else renderItems();
 }
 $("btn-select").onclick = () => {
-  if (S.selecting) { if (navTop() === "select") goBack(); else { exitSelect(); renderItems(); } return; }
+  if (S.selecting) { if (navTop() === "select") goBack(); else { const y = window.scrollY; exitSelect(); renderItems(); window.scrollTo(0, y); } return; }
   startSelect();
 };
 $("btn-logout").onclick = () => {
