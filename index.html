@@ -928,8 +928,58 @@ function cleanFolderPath(txt) {            // "2024 / Vakantie" ; null bij ongel
   if (!segs.length || segs.some((x) => !x || x === "." || x === ".." || /[\\:*?"<>|]/.test(x))) return null;
   return segs.join(" / ");
 }
+// Waar kan een nieuwe map komen? Kandidaat-bovenliggende mappen uit wat er al is (meest gebruikte eerst).
+function parentCandidates() {
+  const cnt = new Map();
+  const add = (name, w) => { const segs = (name || "").split(" / "); segs.pop(); const p = segs.join(" / "); cnt.set(p, (cnt.get(p) || 0) + (w || 1)); };
+  const out = [];
+  if (S.view === "folder" && S.current) {
+    const cur = S.folderNames[S.current.id] || "";
+    if (cur) out.push([cur, "in deze map"]);
+    const segs = cur.split(" / "); segs.pop(); if (segs.length) out.push([segs.join(" / "), "naast deze map"]);
+  } else if (S.view === "year" && S.items.length) {
+    S.items.forEach((f) => (f.parents || []).forEach((pid) => add(S.folderNames[pid], 1)));
+  }
+  if (out.length < 2) S.folders.forEach((f) => { if (f.name.includes(" / ")) add(f.name, 0.01); });
+  [...cnt.entries()].filter(([p]) => p).sort((a, b) => b[1] - a[1]).slice(0, 12).forEach(([p]) => { if (!out.some((o) => o[0] === p)) out.push([p, ""]); });
+  return out;
+}
+function askNewFolder(prefill) {
+  return new Promise((resolve) => {
+    const cands = parentCandidates();
+    const bg = document.createElement("div"); bg.className = "sheet-bg"; bg.id = "asksheet"; bg.style.zIndex = 90;
+    bg.innerHTML = `<div class="sheet"><h3>Nieuwe map</h3>
+      <label class="muted" style="font-size:13px">Binnen welke map?</label>
+      <select id="nf-parent" style="width:100%;margin:4px 0 10px;padding:8px">${cands.map((c, i) => `<option value="${i}">${esc(c[0])}${c[1] ? " (" + esc(c[1]) + ")" : ""}</option>`).join("")}<option value="top">(bovenste niveau van het archief)</option><option value="free">Anders: volledig pad zelf typen…</option></select>
+      <label class="muted" style="font-size:13px" id="nf-label">Naam van de nieuwe map</label>
+      <input type="text" id="ask-input" autocomplete="off" style="margin-top:4px">
+      <p id="nf-preview" style="font-size:13px;margin:10px 0 0"></p>
+      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn" id="ask-no" style="flex:1">Annuleren</button><button class="btn ok" id="ask-ok" style="flex:1">Aanmaken</button></div></div>`;
+    document.body.appendChild(bg);
+    const sel = bg.querySelector("#nf-parent"), inp = bg.querySelector("#ask-input"), prev = bg.querySelector("#nf-preview");
+    if (!cands.length) sel.value = "top";
+    const full = () => {
+      const v = sel.value, t = inp.value.trim();
+      if (v === "free" || v === "top") return t;
+      return cands[Number(v)][0] + " / " + t;
+    };
+    const upd = () => {
+      bg.querySelector("#nf-label").textContent = sel.value === "free" ? "Volledig pad (niveaus gescheiden door /)" : "Naam van de nieuwe map";
+      prev.innerHTML = inp.value.trim() ? "Wordt aangemaakt als: <b>" + esc(full()) + "</b>" : "";
+    };
+    sel.onchange = upd; inp.oninput = upd;
+    if (prefill) { sel.value = "free"; inp.value = prefill; }
+    upd();
+    const done = (v) => { bg.remove(); resolve(v); };
+    bg.querySelector("#ask-no").onclick = () => done(null);
+    bg.querySelector("#ask-ok").onclick = () => done(full());
+    inp.onkeydown = (e) => { if (e.key === "Enter") done(full()); };
+    bg.onclick = (e) => { if (e.target === bg) done(null); };
+    setTimeout(() => { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }, 50);
+  });
+}
 async function createFolderDialog(prefill) {
-  const txt = await askText("Nieuwe map", "Geef het volledige pad, met <b>/</b> tussen de niveaus (bijv. <b>2024 / Zomerkamp</b>). De map wordt bij de volgende synchronisatie ook op de laptop aangemaakt.", prefill);
+  const txt = await askNewFolder();
   if (txt === null) return null;
   const name = cleanFolderPath(txt);
   if (!name) { toast("Ongeldige naam (leeg niveau of tekens zoals : * ? \" < > |)"); return null; }
