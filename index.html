@@ -867,17 +867,52 @@ function pickFolder(title, excludeId, onPick, initialQuery) {
   sh.innerHTML = `<div class="sheet"><h3>${esc(title)}</h3>
     <input type="text" id="pick-search" placeholder="Zoek map…" style="margin-bottom:6px">
     <div class="muted" id="pick-hint" style="font-size:12px;margin-bottom:8px"></div>
-    ${S.look ? "" : '<button class="btn" id="pick-new" style="width:100%;margin-bottom:8px">➕ Nieuwe map…</button>'}
+    <div id="pick-crumbs" style="display:flex;flex-wrap:wrap;gap:2px 0;align-items:center;font-size:13px;margin-bottom:6px"></div>
+    <div style="display:flex;gap:6px;margin-bottom:8px"><button class="btn ok" id="pick-here" style="flex:1" disabled>✔ Kies deze map</button>${S.look ? "" : '<button class="btn" id="pick-new" style="flex:1">➕ Nieuwe map hier…</button>'}</div>
     <div class="list" id="pick-list"></div>
     <button class="btn" id="sheet-cancel" style="width:100%;margin-top:12px">Annuleren</button></div>`;
-  $("sheet-cancel").onclick = closeSheet;
+  S.pickLevel = [];                                    // waar je nu bent bij het doorklikken (niveaus van de mapnaam)
+  $("sheet-cancel").onclick = () => { S.pickLevel = null; closeSheet(); };
   if ($("pick-new")) $("pick-new").onclick = async () => {
-    const f = await createFolderDialog(newFolderPrefill());
-    if (f) { closeSheet(); onPick(f); }
+    const f = await createFolderDialog();
+    if (f) { S.pickLevel = null; closeSheet(); onPick(f); }
   };
-  sh.onclick = (e) => { if (e.target === sh) closeSheet(); };
+  sh.onclick = (e) => { if (e.target === sh) { S.pickLevel = null; closeSheet(); } };
+  const drill = () => {                                  // doorklikken: hoofdmap > map > submap ...
+    const lvl = S.pickLevel, list = $("pick-list"); list.innerHTML = "";
+    const prefix = lvl.join(" / ");
+    const cr = $("pick-crumbs");
+    cr.innerHTML = `<button class="btn small" data-i="-1" style="padding:3px 8px">Hoofdmap</button>` + lvl.map((p, i) => `<span class="muted" style="margin:0 2px">›</span><button class="btn small" data-i="${i}" style="padding:3px 8px">${esc(p)}</button>`).join("");
+    cr.querySelectorAll("button").forEach((b) => b.onclick = () => { S.pickLevel = lvl.slice(0, Number(b.dataset.i) + 1); drill(); });
+    const here = S.folders.find((f) => f.name === prefix && f.id !== excludeId);
+    $("pick-here").disabled = !here; $("pick-here").textContent = here ? `✔ Kies "${lvl[lvl.length - 1]}"` : "✔ Kies deze map";
+    $("pick-here").onclick = () => { if (here) { S.pickLevel = null; closeSheet(); onPick(here); } };
+    const nodes = new Map();
+    S.folders.forEach((f) => {
+      if (f.id === excludeId) return;
+      const segs = f.name.split(" / ");
+      if (segs.length <= lvl.length || lvl.some((p, i) => segs[i] !== p)) return;
+      const nxt = segs[lvl.length], key = nxt;
+      const n = nodes.get(key) || { name: nxt, folder: null, kids: 0 };
+      if (segs.length === lvl.length + 1) n.folder = f; else n.kids++;
+      nodes.set(key, n);
+    });
+    $("pick-hint").textContent = `Klik door de mappen. Staat de map die je zoekt er niet bij, dan kun je ook zoeken.`;
+    [...nodes.values()].sort((a, b) => a.name.localeCompare(b.name, "nl", { numeric: true })).forEach((n) => {
+      const b = document.createElement("button"); b.className = "row pick-row";
+      b.innerHTML = `<span>📁</span><span class="name">${esc(n.name)}</span><span class="count">${n.kids ? "›" : ""}</span>`;
+      b.onclick = () => {
+        if (n.kids) { S.pickLevel = lvl.concat([n.name]); drill(); }
+        else if (n.folder) { S.pickLevel = null; closeSheet(); onPick(n.folder); }
+      };
+      list.appendChild(b);
+    });
+    if (!list.children.length) list.innerHTML = '<div class="muted">Geen submappen. Kies deze map of maak hier een nieuwe map.</div>';
+  };
   const draw = () => {
     const q = $("pick-search").value.toLowerCase();
+    if (!q) { $("pick-crumbs").style.display = ""; drill(); return; }
+    $("pick-crumbs").style.display = "none"; $("pick-here").disabled = true; $("pick-here").textContent = "✔ Kies deze map";
     const list = $("pick-list"); list.innerHTML = "";
     const found = S.folders.filter((f) => f.id !== excludeId && f.name.toLowerCase().includes(q));
     $("pick-hint").textContent = q ? `${found.length} map(pen) met "${$("pick-search").value}" — wis het zoekvak om alle ${S.folders.length} mappen (met submappen) te zien.` : `${found.length} mappen, inclusief alle submappen.`;
@@ -890,7 +925,7 @@ function pickFolder(title, excludeId, onPick, initialQuery) {
     });
     if (!list.children.length) list.innerHTML = '<div class="muted">Geen mappen gevonden.</div>';
   };
-  if (initialQuery) $("pick-search").value = initialQuery;
+  // (geen voorgevulde zoekopdracht meer: je klikt door de niveaus)
   $("pick-search").oninput = draw; draw();
 }
 
@@ -933,14 +968,15 @@ function parentCandidates() {
   const cnt = new Map();
   const add = (name, w) => { const segs = (name || "").split(" / "); segs.pop(); const p = segs.join(" / "); cnt.set(p, (cnt.get(p) || 0) + (w || 1)); };
   const out = [];
-  if (S.view === "folder" && S.current) {
+  if (S.pickLevel && S.pickLevel.length) out.push([S.pickLevel.join(" / "), "gekozen map"]);
+  if (S.view === "folder" && S.current && !out.length) {
     const cur = S.folderNames[S.current.id] || "";
     if (cur) out.push([cur, "in deze map"]);
     const segs = cur.split(" / "); segs.pop(); if (segs.length) out.push([segs.join(" / "), "naast deze map"]);
   } else if (S.view === "year" && S.items.length) {
     S.items.forEach((f) => (f.parents || []).forEach((pid) => add(S.folderNames[pid], 1)));
   }
-  if (out.length < 2) S.folders.forEach((f) => { if (f.name.includes(" / ")) add(f.name, 0.01); });
+  if (out.length < 2 && !(S.pickLevel && S.pickLevel.length)) S.folders.forEach((f) => { if (f.name.includes(" / ")) add(f.name, 0.01); });
   [...cnt.entries()].filter(([p]) => p).sort((a, b) => b[1] - a[1]).slice(0, 12).forEach(([p]) => { if (!out.some((o) => o[0] === p)) out.push([p, ""]); });
   return out;
 }
