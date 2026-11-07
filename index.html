@@ -868,7 +868,7 @@ function pickFolder(title, excludeId, onPick, initialQuery) {
     <input type="text" id="pick-search" placeholder="Zoek map…" style="margin-bottom:6px">
     <div class="muted" id="pick-hint" style="font-size:12px;margin-bottom:8px"></div>
     <div id="pick-crumbs" style="display:flex;flex-wrap:wrap;gap:2px 0;align-items:center;font-size:13px;margin-bottom:6px"></div>
-    <div style="display:flex;gap:6px;margin-bottom:8px"><button class="btn ok" id="pick-here" style="flex:1" disabled>✔ Kies deze map</button>${S.look ? "" : '<button class="btn" id="pick-new" style="flex:1">➕ Nieuwe map hier…</button>'}</div>
+    <div style="display:flex;gap:6px;margin-bottom:8px"><button class="btn ok" id="pick-here" style="flex:1" disabled>✔ Kies deze map</button>${S.look && !isOwner() ? "" : '<button class="btn" id="pick-new" style="flex:1">➕ Nieuwe map hier…</button>'}</div>
     <div class="list" id="pick-list"></div>
     <button class="btn" id="sheet-cancel" style="width:100%;margin-top:12px">Annuleren</button></div>`;
   S.pickLevel = [];                                    // waar je nu bent bij het doorklikken (niveaus van de mapnaam)
@@ -1141,7 +1141,9 @@ function updateBulk() {
     b.innerHTML = `<div class="info">${n} geselecteerd</div>
       <button class="btn" id="bk-all">Alles</button>
       <button class="btn ${S.rangeMode ? "favon" : ""}" id="bk-range" title="Tik eerst de eerste foto, dan deze knop, dan de laatste foto">↔ Bereik</button>
-      <button class="btn primary" id="bk-mv" ${n ? "" : "disabled"}>📁 Verplaats…</button>`;
+      <button class="btn primary" id="bk-mv" ${n ? "" : "disabled"}>📁 Verplaats…</button>
+      ${isOwner() ? `<button class="btn" id="bk-alb" ${n ? "" : "disabled"}>🖼 Album…</button>` : ""}`;
+    if ($("bk-alb")) $("bk-alb").onclick = () => addToAlbumDialog(selectedFiles(), () => { S.selected = new Set(); exitSelect(); rerenderKeep(); });
     $("bk-all").onclick = selectAllVisible;
     $("bk-range").onclick = () => { if (!S.lastSel) { toast("Tik eerst de eerste foto van het bereik"); return; } S.rangeMode = !S.rangeMode; toast(S.rangeMode ? "Tik nu de laatste foto van het bereik" : "Bereik uit"); updateBulk(); };
     $("bk-mv").onclick = () => moveFilesDialog(selectedFiles(), () => { S.selected = new Set(); exitSelect(); rerenderKeep(); });
@@ -1151,6 +1153,7 @@ function updateBulk() {
       <button class="btn" id="bk-all">Alles</button>
       <button class="btn danger" id="bk-weg" ${n ? "" : "disabled"}>🗑 Weg</button>
       <button class="btn" id="bk-mv" ${n ? "" : "disabled"}>📁 Verplaats…</button>
+      <button class="btn" id="bk-alb" ${n ? "" : "disabled"}>🖼 Album…</button>
       <button class="btn ok" id="bk-houd" ${n ? "" : "disabled"}>✓ Houden</button>
       <button class="btn" id="bk-clear" ${n ? "" : "disabled"}>Wis</button>`;
     $("bk-all").onclick = selectAllVisible;
@@ -1161,6 +1164,7 @@ function updateBulk() {
       toast(v === "weg" ? `${files.length} gemarkeerd als weg` : v === "houd" ? `${files.length} behouden` : "Markering gewist");
     };
     $("bk-mv").onclick = () => moveFilesDialog(selectedFiles(), () => { S.selected = new Set(); rerenderKeep(); });
+    $("bk-alb").onclick = () => addToAlbumDialog(selectedFiles(), () => { S.selected = new Set(); rerenderKeep(); });
     $("bk-weg").onclick = act("weg"); $("bk-houd").onclick = act("houd"); $("bk-clear").onclick = act("");
   }
 }
@@ -1193,7 +1197,7 @@ function renderViewer() {
   const album = S.view === "album";
   const v = $("viewer");
   v.innerHTML = `
-    <div class="vtop"><button class="btn small" id="v-close">✕</button><button class="btn small" id="v-show" title="Diavoorstelling">▶</button>${castAppId() ? '<button class="btn small" id="v-cast" title="Naar tv"><svg class="castico" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M21 3H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11z"/></svg></button>' : ""}<button class="btn small" id="v-lens" title="Wat is dit? Zoek deze foto met Google Lens (gebouw, kerk, stad…)">🔍</button><button class="btn small" id="v-info" title="Gegevens van deze foto">ℹ</button><button class="btn small ${isFav(f) ? "favon" : ""}" id="v-fav" title="Beste foto">${isFav(f) ? "♥" : "♡"}</button>
+    <div class="vtop"><button class="btn small" id="v-close">✕</button><button class="btn small" id="v-show" title="Diavoorstelling">▶</button>${castAppId() ? '<button class="btn small" id="v-cast" title="Naar tv"><svg class="castico" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M21 3H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11z"/></svg></button>' : ""}<button class="btn small" id="v-lens" title="Wat is dit? Zoek deze foto met Google Lens (gebouw, kerk, stad…)">🔍</button><button class="btn small" id="v-info" title="Gegevens van deze foto">ℹ</button>${isOwner() && !album ? '<button class="btn small" id="v-album" title="Toevoegen aan album">🖼+</button>' : ""}<button class="btn small ${isFav(f) ? "favon" : ""}" id="v-fav" title="Beste foto">${isFav(f) ? "♥" : "♡"}</button>
       <span class="showonly"><button class="btn small" id="v-speed" title="Snelheid">⏱ ${showCfg.sec}s</button><button class="btn small ${showCfg.shuffle ? "favon" : ""}" id="v-shuf" title="Willekeurige volgorde">🔀</button><button class="btn small" id="v-fit" title="Beeld vullen of hele foto tonen">${showCfg.fit === "cover" ? "⤡ vullen" : "⤢ passen"}</button></span>
       <div class="vtitle"><div>${esc(cleanName(f.name))}</div><div>${esc(folder)} · ${vIndex + 1}/${vList.length}</div>${dateMismatch(f) ? `<div style="color:#ffd27a">⚠ datum in foto: ${dateMismatch(f).ey}, map: ${dateMismatch(f).yr}</div>` : ""}</div></div>
     <div class="vimg ${m}" id="v-img">
@@ -1212,6 +1216,7 @@ function renderViewer() {
   if ($("v-cast")) $("v-cast").onclick = () => startCast(vList, vIndex);
   $("v-lens").onclick = () => lensSearch(vList[vIndex]);
   $("v-info").onclick = () => showInfo(vList[vIndex]);
+  if ($("v-album")) $("v-album").onclick = () => addToAlbumDialog([vList[vIndex]]);
 
   $("v-fav").onclick = async () => { await setProps([f], { fav: isFav(f) ? null : "1" }); renderViewer(); };
   $("v-speed").onclick = () => { const o = [3, 6, 10, 20]; showCfg.sec = o[(o.indexOf(showCfg.sec) + 1) % o.length]; lsSet("fo_show_sec", String(showCfg.sec)); $("v-speed").textContent = `⏱ ${showCfg.sec}s`; if (showTimer) restartShowTimer(); };
@@ -1496,7 +1501,8 @@ async function renderAlbumsHome() {
     const root = await findAlbumsRoot();
     S.albumList = await listAll(`'${root}' in parents and trashed=false and mimeType='${FOLDER}'`, "id,name", { orderBy: "name" });
   } catch (e) { c.innerHTML = `<div class="card"><h2>Niets gevonden</h2><p class="muted">${esc(e.message)}</p></div>`; return; }
-  c.innerHTML = `<p class="muted">Verplaats foto's tussen bestaande albums. Nieuwe albums maak je in de foto-app op je laptop.</p><div class="list" id="album-list"></div>`;
+  c.innerHTML = `${isOwner() ? '<button class="btn ok" id="album-new" style="width:100%;margin-bottom:10px">➕ Nieuw album</button>' : ""}<p class="muted">${isOwner() ? "Maak een nieuw album, of voeg foto's toe met 🖼 in de viewer of bij een selectie. Nieuwe albums en toevoegingen komen op de laptop bij het verwerken van wijzigingen." : "Albums van Dave."}</p><div class="list" id="album-list"></div>`;
+  if ($("album-new")) $("album-new").onclick = async () => { const a = await createAlbumDialog(); if (a) renderAlbumsHome(); };
   const list = $("album-list");
   if (!S.albumList.length) list.innerHTML = '<div class="muted">Nog geen albums gesynct.</div>';
   S.albumList.forEach((a) => {
@@ -1509,6 +1515,61 @@ async function openAlbum(a) {
   S.view = "album"; S.current = { id: a.id, name: a.name }; S.filter = "all";
   await loadItems(`'${a.id}' in parents and trashed=false and mimeType contains 'image/'`, a.name, "name");
   setHeader(a.name, true);
+}
+async function ensureAlbums() {
+  const root = await findAlbumsRoot();
+  S.albumList = await listAll(`'${root}' in parents and trashed=false and mimeType='${FOLDER}'`, "id,name", { orderBy: "name" });
+  return root;
+}
+async function createAlbumDialog() {
+  const name = await askText("Nieuw album", "Naam van het album", "");
+  if (!name) return null;
+  if (/[\\\/:*?"<>|]/.test(name)) { toast("Ongeldige naam (tekens zoals / : * ? \" < > |)"); return null; }
+  try {
+    const root = await ensureAlbums();
+    const ex = S.albumList.find((a) => a.name.toLowerCase() === name.toLowerCase());
+    if (ex) { toast("Dit album bestaat al"); return ex; }
+    const r = await gapi("/files", { method: "POST", params: { fields: "id,name" }, body: { name, mimeType: FOLDER, parents: [root], properties: { newalb: "1" } } });
+    const a = { id: r.id, name: r.name || name };
+    S.albumList.push(a); S.albumList.sort((x, y) => x.name.localeCompare(y.name, "nl", { numeric: true }));
+    toast(`Album "${name}" aangemaakt`);
+    return a;
+  } catch (e) { toast("Aanmaken mislukt: " + e.message.slice(0, 80)); return null; }
+}
+// Foto('s) uit een map/jaar/viewer aan een album toevoegen: er komt een kleine kopie van het voorbeeld in de albummap (de laptop neemt dit bij synchroniseren over)
+async function addToAlbumDialog(files, onDone) {
+  files = files.filter(Boolean); if (!files.length) return;
+  try { await ensureAlbums(); } catch (e) { toast(e.message.slice(0, 100)); return; }
+  const sh = $("sheet");
+  const draw = () => {
+    sh.className = "sheet-bg";
+    sh.innerHTML = `<div class="sheet"><h3>${files.length === 1 ? "Foto" : files.length + " foto's"} toevoegen aan album…</h3>
+      <div class="list"><button class="row" id="alb-new"><span>➕</span><span class="name">Nieuw album…</span></button>
+      ${S.albumList.map((a) => `<button class="row" data-id="${a.id}"><span>🖼</span><span class="name">${esc(a.name)}</span></button>`).join("")}</div>
+      <button class="btn" id="sheet-cancel" style="width:100%;margin-top:12px">Annuleren</button></div>`;
+    $("sheet-cancel").onclick = closeSheet;
+    sh.onclick = (e) => { if (e.target === sh) closeSheet(); };
+    $("alb-new").onclick = async () => { const a = await createAlbumDialog(); if (a) draw(); };
+    sh.querySelectorAll("[data-id]").forEach((b) => b.onclick = () => put(S.albumList.find((a) => a.id === b.dataset.id)));
+  };
+  const put = async (album) => {
+    if (navTop() !== "sheet") hideSheet(); else closeSheet();
+    let ok = 0, dup = 0;
+    try {
+      const have = new Set((await listAll(`'${album.id}' in parents and trashed=false`, "id,properties")).map((x) => x.properties && x.properties.ap).filter(Boolean));
+      for (const f of files) {
+        const pid = (f.properties && f.properties.pid) || null;
+        if (!pid) { toast("Deze foto heeft nog geen voorbeeld-id; eerst synchroniseren"); continue; }
+        if (have.has(String(pid)) || (f.parents || []).includes(album.id)) { dup++; continue; }
+        await gapi("/files/" + f.id + "/copy", { method: "POST", params: { fields: "id" }, body: { name: f.name, parents: [album.id], properties: { ap: String(pid) } } });
+        have.add(String(pid)); ok++;
+      }
+    } catch (e) { toast("Mislukt: " + e.message.slice(0, 80)); }
+    toast(`${ok} foto('s) aan "${album.name}" toegevoegd${dup ? `, ${dup} stonden er al in` : ""}`);
+    if (onDone) onDone();
+  };
+  pushNav("sheet");
+  draw();
 }
 function pickAlbum(mode) {
   const files = selectedFiles(); if (!files.length) return;
@@ -1540,7 +1601,15 @@ function pickAlbum(mode) {
 function closeSheet() { if (navTop() === "sheet") goBack(); else hideSheet(); }
 function hideSheet() { $("sheet").className = "hidden"; $("sheet").innerHTML = ""; }
 async function removeFromAlbum() {
-  const files = selectedFiles(); if (!files.length) return;
+  let files = selectedFiles(); if (!files.length) return;
+  const copies = files.filter((f) => f.properties && f.properties.ap);
+  for (const f of copies) {
+    try { await gapi("/files/" + f.id, { method: "PATCH", body: { trashed: true } }); S.items = S.items.filter((x) => x.id !== f.id); }
+    catch (e) { toast("Mislukt: " + e.message.slice(0, 80)); }
+  }
+  if (copies.length) { S.selected = new Set(); renderItems(); toast(`${copies.length} foto('s) uit album gehaald`); }
+  files = files.filter((f) => !(f.properties && f.properties.ap));
+  if (!files.length) return;
   const multi = files.filter((f) => (f.parents || []).length > 1);
   if (multi.length < files.length) {
     toast(`${files.length - multi.length} foto('s) staan alleen in dit album: gebruik "Verplaats naar…", of markeer ze als weg bij Opschonen.`);
