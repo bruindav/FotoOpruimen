@@ -791,8 +791,9 @@ function makeTile(f, idx) {
   const t = document.createElement("div");
   t.className = "tile"; t.dataset.id = f.id;
   t.dataset.ratio = String(ratio);
-  const m = S.look ? "" : mark(f);
-  const mv = S.look ? "" : (f.properties && f.properties.mv);
+  const showMarks = !S.look || isOwner();        // eigenaar ziet ook in Kijken wat al op weg/verplaatsen staat
+  const m = showMarks ? mark(f) : "";
+  const mv = showMarks ? (f.properties && f.properties.mv) : "";
   if (m) t.classList.add(m);
   if (mv) t.classList.add("mv");
   if (S.selected.has(f.id)) t.classList.add("selected");
