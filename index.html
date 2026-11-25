@@ -104,6 +104,9 @@
   .tile.weg .badge { background: var(--danger); }
   .tile.houd .badge { background: var(--ok); }
   .tile .favflag { position: absolute; right: 6px; bottom: 4px; font-size: 16px; color: #ff6b81; text-shadow: 0 0 4px #000; }
+  .tile .zoombtn { display: none; position: absolute; right: 6px; bottom: 6px; width: 34px; height: 34px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 17px; line-height: 34px; padding: 0; cursor: pointer; }
+  .selecting .tile .zoombtn { display: block; }
+  .selecting .tile .favflag { bottom: 44px; }
   .tile .dateflag { position: absolute; left: 4px; bottom: 4px; max-width: calc(100% - 34px); font-size: 11px; line-height: 1.3; padding: 1px 6px; border-radius: 6px; background: rgba(0,0,0,.68); color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
   .tile .dateflag ~ .dmflag { bottom: 24px; }
   .tile .dmflag { position: absolute; left: 4px; bottom: 4px; font-size: 11px; padding: 1px 6px; border-radius: 99px; background: rgba(0,0,0,.72); color: #ffd27a; }
@@ -820,6 +823,11 @@ function makeTile(f, idx) {
   t.addEventListener("pointermove", (e) => { if (lp && Math.hypot(e.clientX - lx, e.clientY - ly) > 8) lpStop(); });
   ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => t.addEventListener(ev, lpStop));
   t.addEventListener("contextmenu", (e) => { if (canSelect()) e.preventDefault(); });
+  const zoom = document.createElement("button");       // in de selectiemodus: foto toch uitvergroten, zonder de selectie te veranderen
+  zoom.className = "zoombtn"; zoom.type = "button"; zoom.textContent = "🔍"; zoom.title = "Uitvergroten";
+  zoom.addEventListener("click", (e) => { e.stopPropagation(); e.preventDefault(); openViewer(idx); });
+  ["pointerdown", "pointerup"].forEach((ev) => zoom.addEventListener(ev, (e) => e.stopPropagation()));
+  t.appendChild(zoom);
   t.onclick = () => {
     if (lpFired) { lpFired = false; return; }
     if (S.selecting) toggleSelect(f.id, t);
@@ -1199,7 +1207,7 @@ function closeViewer() { if (navTop() === "viewer") goBack(); else hideViewer();
 function hideViewer(quiet) {
   stopShow();
   $("viewer").classList.add("hidden"); document.body.style.overflow = "";
-  if (!quiet && S.view !== "home") renderItems();
+  if (!quiet && S.view !== "home") { if (S.selecting && typeof rerenderKeep === "function") rerenderKeep(); else renderItems(); }
 }
 function renderViewer() {
   const f = vList[vIndex]; if (!f) return closeViewer();
